@@ -327,12 +327,12 @@ export function CreatePipelineForm() {
                                     </FormItem>
                                 )}
                             />
-                             <div className="grid grid-cols-2 gap-4">
+                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <FormField
                                     control={form.control}
                                     name="sink.properties.index"
                                     render={({ field }) => (
-                                        <FormItem>
+                                        <FormItem className="md:col-span-1">
                                             <FormLabel>Elasticsearch Index</FormLabel>
                                             <FormControl><Input placeholder="my-pipeline-index" {...field} /></FormControl>
                                             <FormMessage />
@@ -371,12 +371,10 @@ export function CreatePipelineForm() {
                             <CardDescription>Use our AI assistant to validate your flow's logic before running the pipeline.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="flex items-center gap-2">
-                                <Button type="button" variant="outline" onClick={handleValidate} disabled={isValidating}>
-                                    {isValidating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                                    Validate Flow with AI
-                                </Button>
-                            </div>
+                            <Button type="button" variant="outline" onClick={handleValidate} disabled={isValidating}>
+                                {isValidating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                                Validate Flow with AI
+                            </Button>
                             {validationResult && (
                                 <div className={cn("mt-4 flex items-start gap-3 rounded-lg border p-4 w-full", validationResult.isValid ? "border-green-600 bg-green-50/50" : "border-destructive bg-destructive/10")}>
                                     {validationResult.isValid ? <CheckCircle className="h-5 w-5 flex-shrink-0 text-green-600" /> : <XCircle className="h-5 w-5 flex-shrink-0 text-destructive" />}
@@ -389,20 +387,23 @@ export function CreatePipelineForm() {
                                 </div>
                             )}
                         </CardContent>
-                        <CardFooter className="border-t pt-6 flex-col items-start gap-4">
-                            <p className="text-sm text-muted-foreground">
+                        <CardFooter className="border-t pt-6 flex flex-col items-start gap-4 md:flex-row md:items-center md:justify-between">
+                            <p className="text-sm text-muted-foreground max-w-md">
                                 After validation is successful, you can run the pipeline. This will execute the defined data flow.
                             </p>
-                            <Button type="submit" disabled={isRunning || !validationResult?.isValid}>
-                                {isRunning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
-                                Run Pipeline
-                            </Button>
+                            <div className="flex gap-2">
+                                <Button type="button" variant="ghost" onClick={() => router.push('/')}>Cancel</Button>
+                                <Button type="submit" disabled={isRunning || !validationResult?.isValid}>
+                                    {isRunning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+                                    Run Pipeline
+                                </Button>
+                            </div>
                         </CardFooter>
                     </Card>
                 </div>
                 
                 <div className="lg:col-span-1 space-y-6">
-                    <Card className="sticky top-6">
+                    <Card className="sticky top-20">
                         <CardHeader>
                             <CardTitle>Flow Preview</CardTitle>
                              <CardDescription>A live visualization of your pipeline.</CardDescription>
@@ -414,10 +415,6 @@ export function CreatePipelineForm() {
                             />
                         </CardContent>
                     </Card>
-                </div>
-
-                <div className="lg:col-span-3 flex justify-end gap-2">
-                     <Button type="button" variant="ghost" onClick={() => router.push('/')}>Cancel</Button>
                 </div>
             </form>
         </Form>
