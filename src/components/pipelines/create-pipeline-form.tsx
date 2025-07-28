@@ -86,7 +86,7 @@ export function CreatePipelineForm() {
     const formatPropertiesForAI = (processors: FormValues['processors']) => {
         return processors.map(p => ({
             type: p.type,
-            properties: getBrickConfig(p.type)?.format(p.properties)
+            properties: p.properties // The properties are already structured, no need for custom formatting here.
         }));
     }
 
@@ -186,7 +186,7 @@ export function CreatePipelineForm() {
         
         const formatted = config.format(processor.properties);
         if (!formatted || formatted.trim() === '') {
-            return <span className="text-muted-foreground/70">No instructions provided. Click 'Configure' to add them.</span>;
+            return <span className="text-muted-foreground/70">No properties configured. Click 'Configure' to add them.</span>;
         }
         return formatted;
     }

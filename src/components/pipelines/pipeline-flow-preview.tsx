@@ -51,7 +51,7 @@ const BrickCard = ({ type, properties, isFirst, isLast, isSink }: { type: string
                 </CardHeader>
                 <CardContent className="px-4 pb-4 pt-0">
                     <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md font-mono whitespace-pre-wrap break-words">
-                        {formattedProperties || (isSink ? 'Sink Configuration' : 'No instructions provided.')}
+                        {formattedProperties || (isSink ? 'Sink Configuration' : 'No properties configured.')}
                     </div>
                 </CardContent>
             </Card>
@@ -67,7 +67,10 @@ const BrickCard = ({ type, properties, isFirst, isLast, isSink }: { type: string
 function formatSinkProperties(sinkProperties: any): string {
     if (!sinkProperties) return '';
     const { elasticsearchUrl, index } = sinkProperties;
-    return `URL: ${elasticsearchUrl}\nIndex: ${index}`;
+    let result = [];
+    if (elasticsearchUrl) result.push(`URL: ${elasticsearchUrl}`);
+    if (index) result.push(`Index: ${index}`);
+    return result.join('\n');
 }
 
 export function PipelineFlowPreview({ processors, sink }: { processors: any[], sink: any }) {
