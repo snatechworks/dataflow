@@ -15,6 +15,10 @@ import { translateFlowToNifi, type TranslateFlowToNifiInput } from './translate-
 const ValidateConfigurationInputSchema = z.object({
   flowDefinition: z.string().describe('The high-level flow definition as a JSON string, containing an array of abstract processors (bricks).'),
   sourceType: z.string().describe('The type of data source (e.g., HTTP, File, Database).'),
+  sink: z.object({
+    type: z.string().describe("The type of data sink (e.g., 'Elasticsearch')."),
+    properties: z.record(z.any()).describe("A map of sink properties (e.g., URL, index name)."),
+  }).describe('The configuration for the data destination.'),
 });
 export type ValidateConfigurationInput = z.infer<typeof ValidateConfigurationInputSchema>;
 
@@ -32,12 +36,12 @@ const prompt = ai.definePrompt({
   name: 'validateConfigurationPrompt',
   input: {schema: ValidateConfigurationInputSchema},
   output: {schema: ValidateConfigurationOutputSchema},
-  prompt: `You are an AI expert in data pipeline configurations. You will receive a high-level flow definition using abstract "bricks" and a source type.
+  prompt: `You are an AI expert in data pipeline configurations. You will receive a high-level flow definition using abstract "bricks", a source type, and a sink type.
 
 Your task is to validate this high-level flow. Check for:
-1.  **Logical Flow**: Does the sequence of bricks make sense? (e.g., you can't split JSON before you've converted a source to JSON).
+1.  **Logical Flow**: Does the sequence of bricks make sense? (e.g., you can't split JSON before you've converted a source like CSV or XML to JSON). Is there a sensible path from the source to the sink?
 2.  **Brick Properties**: Are the properties for each brick plausible? (e.g., a "Split JSON" brick should have a valid JSONPath expression).
-3.  **Completeness**: Is the flow likely to be functional? Does it handle data ingress and transformation logically?
+3.  **Completeness**: Is the flow likely to be functional? Does it handle data ingress, transformation, and egress logically?
 
 Based on your analysis, determine if the overall configuration is valid and set the \`isValid\` output field. Provide detailed, constructive feedback in the \`feedback\` field, explaining any issues found and suggesting improvements. Be specific.
 
@@ -45,6 +49,10 @@ Source Type: {{{sourceType}}}
 High-Level Flow Definition:
 \`\`\`json
 {{{flowDefinition}}}
+\`\`\`
+Sink Definition:
+\`\`\`json
+{{{sink}}}
 \`\`\`
 `,
 });
@@ -67,6 +75,7 @@ const validateConfigurationFlow = ai.defineFlow(
         const translateInput: TranslateFlowToNifiInput = {
             flowDefinition: input.flowDefinition,
             sourceType: input.sourceType,
+            sink: input.sink,
         };
         await translateFlowToNifi(translateInput);
 

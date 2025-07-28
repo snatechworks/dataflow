@@ -24,10 +24,21 @@ const processorSchema = z.object({
   properties: z.string().describe("High-level description of the brick's function."),
 });
 
+const sinkSchema = z.object({
+  type: z.literal('Elasticsearch'),
+  properties: z.object({
+    elasticsearchUrl: z.string().url("Must be a valid URL."),
+    index: z.string().min(1, "Index name is required."),
+    user: z.string().optional(),
+    password: z.string().optional(),
+  })
+});
+
 const formSchema = z.object({
   name: z.string().min(3, "Pipeline name must be at least 3 characters long."),
   nifiProcessGroup: z.string().min(1, "NiFi Process Group is required."),
   processors: z.array(processorSchema).min(1, "At least one brick is required."),
+  sink: sinkSchema,
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -52,6 +63,15 @@ export function CreatePipelineForm() {
             name: '',
             nifiProcessGroup: 'root',
             processors: initialProcessors.HTTP,
+            sink: {
+                type: 'Elasticsearch',
+                properties: {
+                    elasticsearchUrl: 'http://localhost:9200',
+                    index: 'my-data-index',
+                    user: '',
+                    password: ''
+                }
+            }
         },
     });
 
@@ -68,17 +88,17 @@ export function CreatePipelineForm() {
     }
 
     const handleValidate = async () => {
-        const processors = form.getValues('processors');
-        if (!processors || processors.length === 0) {
+        const values = form.getValues();
+        if (!values.processors || values.processors.length === 0) {
             toast({ variant: 'destructive', title: 'Error', description: 'At least one brick is required to validate.' });
             return;
         }
-        const flowDefinition = JSON.stringify({ processors }, null, 2);
+        const flowDefinition = JSON.stringify({ processors: values.processors }, null, 2);
 
         setIsValidating(true);
         setValidationResult(null);
         try {
-            const result = await validateConfigurationAction({ flowDefinition, sourceType: selectedSourceType });
+            const result = await validateConfigurationAction({ flowDefinition, sourceType: selectedSourceType, sink: values.sink });
             setValidationResult(result);
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: 'Failed to validate configuration.' });
@@ -95,6 +115,7 @@ export function CreatePipelineForm() {
             nifiProcessGroup: values.nifiProcessGroup,
             sourceType: selectedSourceType,
             flowDefinition: JSON.stringify({ processors: values.processors }),
+            sink: values.sink,
         }
 
         const result = await createPipelineAction(pipelinePayload);
@@ -117,9 +138,11 @@ export function CreatePipelineForm() {
         setIsDeploying(false);
     }
     
-    const availableBricks = ['CSV to JSON', 'Split JSON', 'Add/Modify Fields', 'Merge Records'];
+    const availableBricks = ['CSV to JSON', 'XML to JSON', 'Excel to CSV', 'Split JSON', 'Add/Modify Fields', 'Merge Records'];
     const brickPlaceholders: Record<string, string> = {
         'CSV to JSON': 'e.g., Use first line as header. Trim whitespace from values.',
+        'XML to JSON': 'e.g., Provide path to XSLT file. Or describe basic transformation.',
+        'Excel to CSV': 'e.g., Use sheet "Sheet1". Skip first 3 rows.',
         'Split JSON': 'e.g., $.customers[*]',
         'Add/Modify Fields': 'e.g., Create field "fullName" by combining "firstName" and "lastName". Set "processed_timestamp" to now().',
         'Merge Records': 'e.g., Group by correlation ID. Combine into batches of 1000 records.',
@@ -250,7 +273,44 @@ export function CreatePipelineForm() {
                             <Plus className="mr-2 h-4 w-4" /> Add Brick
                         </Button>
                     </CardContent>
-                    <CardFooter className="flex-col items-start gap-4 border-t pt-6">
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Data Sink</CardTitle>
+                        <CardDescription>Configure the destination for your data.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <FormField
+                            control={form.control}
+                            name="sink.properties.elasticsearchUrl"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Elasticsearch URL</FormLabel>
+                                    <FormControl><Input placeholder="http://localhost:9200" {...field} /></FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                         <FormField
+                            control={form.control}
+                            name="sink.properties.index"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Elasticsearch Index</FormLabel>
+                                    <FormControl><Input placeholder="my-pipeline-index" {...field} /></FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Validation & Deployment</CardTitle>
+                    </CardHeader>
+                     <CardContent className="flex-col items-start gap-4 pt-0">
                          <div className="flex items-center gap-2">
                             <Button type="button" variant="outline" onClick={handleValidate} disabled={isValidating}>
                                 {isValidating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
@@ -258,7 +318,7 @@ export function CreatePipelineForm() {
                             </Button>
                         </div>
                         {validationResult && (
-                            <div className={cn("flex items-start gap-3 rounded-lg border p-4 w-full", validationResult.isValid ? "border-green-600 bg-green-50" : "border-destructive bg-destructive/10")}>
+                            <div className={cn("mt-4 flex items-start gap-3 rounded-lg border p-4 w-full", validationResult.isValid ? "border-green-600 bg-green-50" : "border-destructive bg-destructive/10")}>
                                 {validationResult.isValid ? <CheckCircle className="h-5 w-5 flex-shrink-0 text-green-600" /> : <XCircle className="h-5 w-5 flex-shrink-0 text-destructive" />}
                                 <div className="flex-1">
                                     <p className={cn("font-semibold", validationResult.isValid ? "text-green-800" : "text-destructive")}>
@@ -268,15 +328,17 @@ export function CreatePipelineForm() {
                                 </div>
                             </div>
                         )}
+                    </CardContent>
+                    <CardFooter>
+                         <Button type="submit" disabled={isDeploying || (validationResult && !validationResult.isValid)}>
+                            {isDeploying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Deploy Pipeline
+                        </Button>
                     </CardFooter>
                 </Card>
                 
                 <div className="flex justify-end gap-2">
                     <Button type="button" variant="ghost" onClick={() => router.push('/')}>Cancel</Button>
-                    <Button type="submit" disabled={isDeploying}>
-                        {isDeploying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Deploy Pipeline
-                    </Button>
                 </div>
             </form>
         </Form>

@@ -7,6 +7,10 @@ import { z } from 'zod';
 const ValidateActionInputSchema = z.object({
   flowDefinition: z.string(),
   sourceType: z.string(),
+  sink: z.object({
+    type: z.string(),
+    properties: z.record(z.any()),
+  }),
 });
 
 export async function validateConfigurationAction(input: ValidateConfigurationInput): Promise<ValidateConfigurationOutput> {

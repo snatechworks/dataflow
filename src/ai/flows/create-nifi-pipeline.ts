@@ -17,6 +17,10 @@ const CreateNifiPipelineInputSchema = z.object({
     nifiProcessGroup: z.string().describe('The ID of the parent process group where the new group will be created.'),
     flowDefinition: z.string().describe('A JSON string representing the high-level flow definition using abstract bricks.'),
     sourceType: z.string().describe('The type of data source (e.g., HTTP, File, Database).'),
+    sink: z.object({
+        type: z.string().describe("The type of data sink (e.g., 'Elasticsearch')."),
+        properties: z.record(z.any()).describe("A map of sink properties (e.g., URL, index name)."),
+    }).describe('The configuration for the data destination.'),
 });
 export type CreateNifiPipelineInput = z.infer<typeof CreateNifiPipelineInputSchema>;
 
@@ -49,6 +53,7 @@ const createNifiPipelineFlow = ai.defineFlow(
         const translateInput: TranslateFlowToNifiInput = {
             flowDefinition: input.flowDefinition,
             sourceType: input.sourceType,
+            sink: input.sink,
         };
         const nifiConfig = await translateFlowToNifi(translateInput);
 
