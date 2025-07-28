@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Globe, FileText, Database, Loader2, Sparkles, CheckCircle, XCircle } from 'lucide-react';
+import { Globe, FileText, Database, Loader2, Sparkles, CheckCircle, XCircle, Package } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
@@ -14,13 +14,13 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { validateConfigurationAction } from '@/app/actions';
+import { validateConfigurationAction, createPipelineAction } from '@/app/actions';
 import type { ValidateConfigurationOutput } from '@/ai/flows/validate-configuration';
 import { cn } from '@/lib/utils';
 
 const formSchema = z.object({
   name: z.string().min(3, "Pipeline name must be at least 3 characters long."),
-  esIndex: z.string().min(3, "Index name must be at least 3 characters long.").regex(/^[a-z0-9_-]+$/, "Index name can only contain lowercase letters, numbers, hyphens, and underscores."),
+  nifiProcessGroup: z.string().min(1, "NiFi Process Group is required."),
   sourceType: z.enum(['HTTP', 'FILE', 'DATABASE']),
   config: z.string().min(10, "Configuration must be at least 10 characters long."),
 });
@@ -38,7 +38,7 @@ export function CreatePipelineForm() {
         resolver: zodResolver(formSchema),
         defaultValues: {
             name: '',
-            esIndex: '',
+            nifiProcessGroup: 'root',
             sourceType: 'HTTP',
             config: '',
         },
@@ -67,28 +67,24 @@ export function CreatePipelineForm() {
     async function onSubmit(values: FormValues) {
         setIsDeploying(true);
         
-        const validation = await validateConfigurationAction({ configuration: values.config, sourceType: values.sourceType });
-        if (!validation.isValid) {
+        const result = await createPipelineAction(values);
+        
+        if (result.success) {
+            toast({
+                title: 'Deployment Successful',
+                description: result.message,
+            });
+            router.push('/');
+        } else {
             toast({
                 variant: 'destructive',
                 title: 'Deployment Failed',
-                description: `Configuration is invalid: ${validation.feedback}`,
+                description: result.message,
                 duration: 9000,
             });
-            setIsDeploying(false);
-            setValidationResult(validation);
-            return;
         }
 
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        toast({
-            title: 'Deployment Successful',
-            description: `Pipeline "${values.name}" has been deployed.`,
-        });
-
         setIsDeploying(false);
-        router.push('/');
     }
     
     const configPlaceholders: Record<z.infer<typeof formSchema>['sourceType'], string> = {
@@ -103,7 +99,7 @@ export function CreatePipelineForm() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Pipeline Details</CardTitle>
-                        <CardDescription>Provide a name and target Elasticsearch index for your pipeline.</CardDescription>
+                        <CardDescription>Provide a name and target NiFi Process Group for your pipeline.</CardDescription>
                     </CardHeader>
                     <CardContent className="grid gap-6 md:grid-cols-2">
                         <FormField
@@ -121,12 +117,12 @@ export function CreatePipelineForm() {
                         />
                         <FormField
                             control={form.control}
-                            name="esIndex"
+                            name="nifiProcessGroup"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Elasticsearch Index Name</FormLabel>
+                                    <FormLabel>NiFi Process Group</FormLabel>
                                     <FormControl>
-                                        <Input placeholder="e.g., customer_orders" {...field} />
+                                        <Input placeholder="e.g., root" {...field} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
@@ -170,7 +166,7 @@ export function CreatePipelineForm() {
                                 </FormItem>
                             )}
                         />
-                        <div className="mt-4">
+                         <div className="mt-4 flex items-center gap-2">
                             <Button type="button" variant="outline" onClick={handleValidate} disabled={isValidating}>
                                 {isValidating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                                 Validate with AI

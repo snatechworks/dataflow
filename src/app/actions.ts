@@ -1,15 +1,16 @@
 "use server";
 
 import { validateConfiguration, type ValidateConfigurationInput, type ValidateConfigurationOutput } from "@/ai/flows/validate-configuration";
+import { createNifiPipeline, type CreateNifiPipelineInput, type CreateNifiPipelineOutput } from "@/ai/flows/create-nifi-pipeline";
 import { z } from 'zod';
 
-const ActionInputSchema = z.object({
+const ValidateActionInputSchema = z.object({
   configuration: z.string(),
   sourceType: z.string(),
 });
 
 export async function validateConfigurationAction(input: ValidateConfigurationInput): Promise<ValidateConfigurationOutput> {
-  const parsedInput = ActionInputSchema.safeParse(input);
+  const parsedInput = ValidateActionInputSchema.safeParse(input);
   if (!parsedInput.success) {
     // This provides basic error feedback for invalid input shape.
     return {
@@ -27,6 +28,19 @@ export async function validateConfigurationAction(input: ValidateConfigurationIn
     return {
       isValid: false,
       feedback: "An unexpected error occurred while validating the configuration. The AI model may be temporarily unavailable. Please try again later.",
+    };
+  }
+}
+
+export async function createPipelineAction(input: CreateNifiPipelineInput): Promise<CreateNifiPipelineOutput> {
+  try {
+    const result = await createNifiPipeline(input);
+    return result;
+  } catch (error) {
+    console.error("NiFi pipeline creation flow failed:", error);
+    return {
+      success: false,
+      message: "An unexpected error occurred while creating the pipeline. Please check the application logs for more details.",
     };
   }
 }

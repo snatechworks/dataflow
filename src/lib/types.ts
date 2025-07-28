@@ -10,3 +10,10 @@ export interface Pipeline {
   createdAt: string;
   esIndex: string;
 }
+
+export interface NifiPipeline {
+    name: string;
+    nifiProcessGroup: string;
+    sourceType: PipelineSourceType;
+    config: string;
+}
