@@ -20,22 +20,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 
 const processorSchema = z.object({
-  type: z.string().min(1, "Processor type is required."),
-  properties: z.string().min(1, "Processor properties are required (at least '{}')."),
+  type: z.string().min(1, "Brick type is required."),
+  properties: z.string().describe("High-level description of the brick's function."),
 });
 
 const formSchema = z.object({
   name: z.string().min(3, "Pipeline name must be at least 3 characters long."),
   nifiProcessGroup: z.string().min(1, "NiFi Process Group is required."),
-  processors: z.array(processorSchema).min(1, "At least one processor is required."),
+  processors: z.array(processorSchema).min(1, "At least one brick is required."),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
 const initialProcessors: Record<string, z.infer<typeof processorSchema>[]> = {
-    HTTP: [{ type: 'GetHTTP', properties: '{\n  "URL": "https://api.example.com/data",\n  "Filename": "${UUID()}"\n}' }],
-    FILE: [{ type: 'GetFile', properties: '{\n  "Input Directory": "/path/to/source",\n  "Keep Source File": "true"\n}' }],
-    DATABASE: [{ type: 'QueryDatabaseRecord', properties: '{\n  "Database Connection Pooling Service": "your-db-pool-service-id",\n  "SQL select query": "SELECT * FROM users"\n}' }],
+    HTTP: [{ type: 'Add/Modify Fields', properties: 'Define a URI for each record using the expression: ${http.request.uri}/${json.id}' }],
+    FILE: [{ type: 'CSV to JSON', properties: 'The first line is a header line.' }],
+    DATABASE: [{ type: 'Add/Modify Fields', properties: 'Create a "source_system" field with the static value "MainDB".' }],
 }
 
 export function CreatePipelineForm() {
@@ -62,7 +62,6 @@ export function CreatePipelineForm() {
 
     const handleSourceTypeChange = (value: string) => {
         setSelectedSourceType(value);
-        // Reset processors to the default for the selected source type
         const newProcessors = initialProcessors[value] || [];
         form.setValue('processors', newProcessors);
         setValidationResult(null);
@@ -71,15 +70,15 @@ export function CreatePipelineForm() {
     const handleValidate = async () => {
         const processors = form.getValues('processors');
         if (!processors || processors.length === 0) {
-            toast({ variant: 'destructive', title: 'Error', description: 'At least one processor is required to validate.' });
+            toast({ variant: 'destructive', title: 'Error', description: 'At least one brick is required to validate.' });
             return;
         }
-        const config = JSON.stringify({ processors }, null, 2);
+        const flowDefinition = JSON.stringify({ processors }, null, 2);
 
         setIsValidating(true);
         setValidationResult(null);
         try {
-            const result = await validateConfigurationAction({ configuration: config, sourceType: selectedSourceType });
+            const result = await validateConfigurationAction({ flowDefinition, sourceType: selectedSourceType });
             setValidationResult(result);
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: 'Failed to validate configuration.' });
@@ -94,9 +93,8 @@ export function CreatePipelineForm() {
         const pipelinePayload = {
             name: values.name,
             nifiProcessGroup: values.nifiProcessGroup,
-            // The backend expects `sourceType` and `config`
             sourceType: selectedSourceType,
-            config: JSON.stringify({ processors: values.processors }),
+            flowDefinition: JSON.stringify({ processors: values.processors }),
         }
 
         const result = await createPipelineAction(pipelinePayload);
@@ -119,7 +117,13 @@ export function CreatePipelineForm() {
         setIsDeploying(false);
     }
     
-    const availableProcessors = ['GetHTTP', 'PutFile', 'GetFile', 'QueryDatabaseRecord', 'JoltTransformJSON', 'UpdateAttribute', 'RouteOnAttribute', 'LogAttribute'];
+    const availableBricks = ['CSV to JSON', 'Split JSON', 'Add/Modify Fields', 'Merge Records'];
+    const brickPlaceholders: Record<string, string> = {
+        'CSV to JSON': 'e.g., Use first line as header. Trim whitespace from values.',
+        'Split JSON': 'e.g., $.customers[*]',
+        'Add/Modify Fields': 'e.g., Create field "fullName" by combining "firstName" and "lastName". Set "processed_timestamp" to now().',
+        'Merge Records': 'e.g., Group by correlation ID. Combine into batches of 1000 records.',
+    };
 
     return (
         <Form {...form}>
@@ -162,7 +166,7 @@ export function CreatePipelineForm() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Source Type</CardTitle>
-                        <CardDescription>Select the primary data source for this pipeline. This will provide a default starting processor.</CardDescription>
+                        <CardDescription>Select the primary data source for this pipeline. This will provide a default starting brick.</CardDescription>
                     </CardHeader>
                     <CardContent>
                          <FormControl>
@@ -177,15 +181,15 @@ export function CreatePipelineForm() {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Define NiFi Flow</CardTitle>
-                        <CardDescription>Add and configure the processors that will make up your data flow. The order of processors matters.</CardDescription>
+                        <CardTitle>Define Your Data Flow</CardTitle>
+                        <CardDescription>Add and configure "bricks" to build your data flow. The AI will translate these into a NiFi pipeline.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
                         {fields.map((field, index) => (
                             <Card key={field.id} className="bg-secondary/50">
                                 <CardHeader className="py-4">
                                     <div className="flex items-center justify-between">
-                                       <CardTitle className="text-lg">Processor #{index + 1}</CardTitle>
+                                       <CardTitle className="text-lg">Brick #{index + 1}</CardTitle>
                                        <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
                                            <Trash2 className="h-4 w-4 text-destructive" />
                                        </Button>
@@ -197,15 +201,15 @@ export function CreatePipelineForm() {
                                         name={`processors.${index}.type`}
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel>Processor Type</FormLabel>
+                                                <FormLabel>Brick Type</FormLabel>
                                                  <Select onValueChange={field.onChange} defaultValue={field.value}>
                                                     <FormControl>
                                                     <SelectTrigger>
-                                                        <SelectValue placeholder="Select a processor type" />
+                                                        <SelectValue placeholder="Select a brick type" />
                                                     </SelectTrigger>
                                                     </FormControl>
                                                     <SelectContent>
-                                                        {availableProcessors.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                                                        {availableBricks.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                                                     </SelectContent>
                                                 </Select>
                                                 <FormMessage />
@@ -218,10 +222,10 @@ export function CreatePipelineForm() {
                                         name={`processors.${index}.properties`}
                                         render={({ field }) => (
                                             <FormItem className="md:col-span-2">
-                                                <FormLabel>Properties (JSON)</FormLabel>
+                                                <FormLabel>Instructions</FormLabel>
                                                 <FormControl>
                                                     <Textarea
-                                                        placeholder='{ "Property": "Value" }'
+                                                        placeholder={brickPlaceholders[form.watch(`processors.${index}.type`)] || 'Describe what this brick should do...'}
                                                         className="min-h-[120px] font-mono text-sm"
                                                         {...field}
                                                          onChange={(e) => {
@@ -241,9 +245,9 @@ export function CreatePipelineForm() {
                          <Button
                             type="button"
                             variant="outline"
-                            onClick={() => append({ type: '', properties: '{}' })}
+                            onClick={() => append({ type: '', properties: '' })}
                         >
-                            <Plus className="mr-2 h-4 w-4" /> Add Processor
+                            <Plus className="mr-2 h-4 w-4" /> Add Brick
                         </Button>
                     </CardContent>
                     <CardFooter className="flex-col items-start gap-4 border-t pt-6">
@@ -258,7 +262,7 @@ export function CreatePipelineForm() {
                                 {validationResult.isValid ? <CheckCircle className="h-5 w-5 flex-shrink-0 text-green-600" /> : <XCircle className="h-5 w-5 flex-shrink-0 text-destructive" />}
                                 <div className="flex-1">
                                     <p className={cn("font-semibold", validationResult.isValid ? "text-green-800" : "text-destructive")}>
-                                        {validationResult.isValid ? "Configuration looks good!" : "Validation Issues Found"}
+                                        {validationResult.isValid ? "Flow logic looks good!" : "Validation Issues Found"}
                                     </p>
                                     <p className="text-sm text-muted-foreground whitespace-pre-wrap">{validationResult.feedback}</p>
                                 </div>

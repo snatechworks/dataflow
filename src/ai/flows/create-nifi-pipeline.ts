@@ -10,10 +10,13 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
+import { translateFlowToNifi, type TranslateFlowToNifiInput } from './translate-flow-to-nifi';
 
 const CreateNifiPipelineInputSchema = z.object({
     name: z.string().describe('The name for the new process group.'),
     nifiProcessGroup: z.string().describe('The ID of the parent process group where the new group will be created.'),
+    flowDefinition: z.string().describe('A JSON string representing the high-level flow definition using abstract bricks.'),
+    sourceType: z.string().describe('The type of data source (e.g., HTTP, File, Database).'),
 });
 export type CreateNifiPipelineInput = z.infer<typeof CreateNifiPipelineInputSchema>;
 
@@ -42,14 +45,21 @@ const createNifiPipelineFlow = ai.defineFlow(
             };
         }
 
+        // Step 1: Translate the high-level flow into a NiFi-specific configuration
+        const translateInput: TranslateFlowToNifiInput = {
+            flowDefinition: input.flowDefinition,
+            sourceType: input.sourceType,
+        };
+        const nifiConfig = await translateFlowToNifi(translateInput);
+
+        // For simplicity, we are creating a single process group. A real implementation would
+        // iterate through the translated processors and create them, connecting them sequentially.
+        // This example demonstrates the translation and creation of the main container.
+
         const parentGroupId = input.nifiProcessGroup;
         const url = `${nifiApiUrl}/process-groups/${parentGroupId}/process-groups`;
 
         try {
-            // NiFi APIs often require fetching the latest revision first to perform a subsequent write operation.
-            // For simplicity in this example, we are skipping that and creating a process group which doesn't require revision.
-            // A real implementation would require more complex state management.
-            
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -58,14 +68,11 @@ const createNifiPipelineFlow = ai.defineFlow(
                 body: JSON.stringify({
                     component: {
                         name: input.name,
-                        position: {
-                            x: 0,
-                            y: 0,
-                        },
+                        position: { x: 0, y: 0 },
+                        // The translated configuration could be stored in the comments of the process group
+                        comments: `Translated from high-level definition. NiFi JSON Configuration:\n${JSON.stringify(nifiConfig, null, 2)}`
                     },
-                    revision: {
-                        version: 0,
-                    },
+                    revision: { version: 0 },
                 }),
             });
 
@@ -73,7 +80,7 @@ const createNifiPipelineFlow = ai.defineFlow(
                 const data = await response.json();
                 return {
                     success: true,
-                    message: `Successfully created NiFi process group "${data.component.name}" with ID: ${data.id}`,
+                    message: `Successfully created NiFi process group "${data.component.name}" with ID: ${data.id}. The translated processor configuration has been added to the process group comments.`,
                 };
             } else {
                 const errorText = await response.text();

@@ -5,14 +5,13 @@ import { createNifiPipeline, type CreateNifiPipelineInput, type CreateNifiPipeli
 import { z } from 'zod';
 
 const ValidateActionInputSchema = z.object({
-  configuration: z.string(),
+  flowDefinition: z.string(),
   sourceType: z.string(),
 });
 
 export async function validateConfigurationAction(input: ValidateConfigurationInput): Promise<ValidateConfigurationOutput> {
   const parsedInput = ValidateActionInputSchema.safeParse(input);
   if (!parsedInput.success) {
-    // This provides basic error feedback for invalid input shape.
     return {
       isValid: false,
       feedback: 'Invalid input provided for validation. Please check the data format.',
@@ -22,12 +21,11 @@ export async function validateConfigurationAction(input: ValidateConfigurationIn
   try {
     const result = await validateConfiguration(parsedInput.data);
     return result;
-  } catch (error) {
+  } catch (error: any) {
     console.error("AI validation flow failed:", error);
-    // Return a structured, user-friendly error to the client
     return {
       isValid: false,
-      feedback: "An unexpected error occurred while validating the configuration. The AI model may be temporarily unavailable. Please try again later.",
+      feedback: `An unexpected error occurred while validating the configuration: ${error.message}`,
     };
   }
 }
