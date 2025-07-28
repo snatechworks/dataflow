@@ -11,7 +11,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
-export const ExecutePipelineInputSchema = z.object({
+const ExecutePipelineInputSchema = z.object({
     name: z.string().describe('The name of the pipeline being executed.'),
     flowDefinition: z.string().describe('A JSON string representing the full, high-level flow definition, including all processors and their properties.'),
     sourceType: z.string().describe('The type of the data source.'),
@@ -22,7 +22,7 @@ export const ExecutePipelineInputSchema = z.object({
 });
 export type ExecutePipelineInput = z.infer<typeof ExecutePipelineInputSchema>;
 
-export const ExecutePipelineOutputSchema = z.object({
+const ExecutePipelineOutputSchema = z.object({
     success: z.boolean().describe('Whether the pipeline execution was successful.'),
     message: z.string().describe('A message summarizing the result of the execution.'),
 });
