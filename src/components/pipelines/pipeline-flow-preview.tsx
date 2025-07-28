@@ -1,6 +1,7 @@
+
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ArrowDown, Database, FileText, Globe, Cpu, Combine, GitCommitHorizontal, VenetianMask } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
@@ -43,6 +44,11 @@ const BrickCard = ({ type, properties, isFirst, isLast, isSink }: { type: string
                     <CardTitle className="text-base font-semibold">{type}</CardTitle>
                 </div>
             </CardHeader>
+            <CardContent className="px-4 pb-4 pt-0">
+                <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md font-mono whitespace-pre-wrap break-words">
+                    {properties || (isSink ? 'Sink Configuration' : 'No instructions provided.')}
+                </p>
+            </CardContent>
         </Card>
         {!isLast && (
             <div className="my-2 text-muted-foreground/50">
@@ -51,6 +57,12 @@ const BrickCard = ({ type, properties, isFirst, isLast, isSink }: { type: string
         )}
     </div>
 );
+
+function formatSinkProperties(sink: any): string {
+    if (!sink || !sink.properties) return '';
+    const { elasticsearchUrl, index } = sink.properties;
+    return `URL: ${elasticsearchUrl}\nIndex: ${index}`;
+}
 
 export function PipelineFlowPreview({ processors, sink }: { processors: any[], sink: any }) {
     if (!processors || processors.length === 0) {
@@ -75,7 +87,7 @@ export function PipelineFlowPreview({ processors, sink }: { processors: any[], s
             ))}
             <BrickCard
                 type={sink.type}
-                properties={JSON.stringify(sink.properties)}
+                properties={formatSinkProperties(sink)}
                 isLast
                 isSink
             />
