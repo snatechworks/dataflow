@@ -12,7 +12,7 @@ export function Logo() {
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="h-7 w-7 text-primary"
+      className="h-7 w-7 text-sidebar-primary"
     >
       <path d="M12 2L2 7l10 5 10-5-10-5z" />
       <path d="M2 17l10 5 10-5" />

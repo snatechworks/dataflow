@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, PlusCircle } from 'lucide-react';
+import { Home, PlusCircle, Settings, LogOut } from 'lucide-react';
 
 import {
   SidebarProvider,
@@ -14,7 +14,6 @@ import {
   SidebarMenuButton,
   SidebarFooter,
   SidebarTrigger,
-  SidebarInset,
 } from '@/components/ui/sidebar';
 import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui/button';
@@ -77,20 +76,56 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <DropdownMenuContent className="w-56 mb-2" side="top" align="start">
                 <DropdownMenuLabel>My Account</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>Profile</DropdownMenuItem>
-                <DropdownMenuItem>Settings</DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Settings</span>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>Log out</DropdownMenuItem>
+                <DropdownMenuItem>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Log out</span>
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </SidebarFooter>
         </Sidebar>
         <div className="flex flex-col flex-1 w-full">
-           <header className="flex h-14 items-center gap-4 border-b bg-card px-6 sticky top-0 z-30">
+           <header className="flex h-16 items-center gap-4 border-b bg-background/95 backdrop-blur-sm px-6 sticky top-0 z-30">
             <SidebarTrigger className="md:hidden" />
-            <h1 className="text-lg font-semibold md:text-xl">{getPageTitle()}</h1>
+            <div className="flex-1">
+              <h1 className="text-lg font-semibold md:text-xl">{getPageTitle()}</h1>
+            </div>
             <div className="ml-auto flex items-center gap-2">
-              <Button variant="outline">Support</Button>
+               <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                    <Avatar className="h-9 w-9">
+                      <AvatarImage src="https://placehold.co/40x40.png" alt="@shadcn" data-ai-hint="person avatar" />
+                      <AvatarFallback>DF</AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">Demo User</p>
+                      <p className="text-xs leading-none text-muted-foreground">
+                        demo@dataflow.com
+                      </p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem>
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Settings</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Log out</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </header>
           <main className="flex-1 p-4 md:p-6 lg:p-8">

@@ -1,10 +1,10 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, Globe, FileText, Database } from "lucide-react";
+import { MoreHorizontal, Globe, FileText, Database, Eye, Play, Square, Pencil, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import type { Pipeline, PipelineSourceType } from "@/lib/types";
 import { PipelineStatusBadge } from "./pipeline-status-badge";
-import { Card } from "../ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const SourceIcons: Record<PipelineSourceType, React.ReactElement> = {
   HTTP: <Globe className="h-5 w-5 text-muted-foreground" />,
@@ -13,6 +13,17 @@ const SourceIcons: Record<PipelineSourceType, React.ReactElement> = {
 };
 
 export function PipelineList({ pipelines }: { pipelines: Pipeline[] }) {
+  if (pipelines.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>No Pipelines Found</CardTitle>
+          <CardDescription>Get started by creating a new data pipeline.</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <Table>
@@ -28,14 +39,14 @@ export function PipelineList({ pipelines }: { pipelines: Pipeline[] }) {
         </TableHeader>
         <TableBody>
           {pipelines.map((pipeline) => (
-            <TableRow key={pipeline.id}>
+            <TableRow key={pipeline.id} className="hover:bg-muted/50">
               <TableCell className="text-center">{SourceIcons[pipeline.sourceType]}</TableCell>
               <TableCell className="font-medium">{pipeline.name}</TableCell>
               <TableCell>
                 <PipelineStatusBadge status={pipeline.status} />
               </TableCell>
               <TableCell>
-                <span className="font-mono text-sm bg-muted px-2 py-1 rounded-md">{pipeline.esIndex}</span>
+                <span className="font-mono text-sm bg-secondary text-secondary-foreground px-2 py-1 rounded-md">{pipeline.esIndex}</span>
               </TableCell>
               <TableCell>{new Date(pipeline.createdAt).toLocaleDateString()}</TableCell>
               <TableCell className="text-right">
@@ -49,13 +60,13 @@ export function PipelineList({ pipelines }: { pipelines: Pipeline[] }) {
                   <DropdownMenuContent align="end">
                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
                     <DropdownMenuSeparator/>
-                    <DropdownMenuItem>View Details</DropdownMenuItem>
-                    <DropdownMenuItem>Start</DropdownMenuItem>
-                    <DropdownMenuItem>Stop</DropdownMenuItem>
-                    <DropdownMenuItem>Edit</DropdownMenuItem>
+                    <DropdownMenuItem><Eye className="mr-2 h-4 w-4"/>View Details</DropdownMenuItem>
+                    <DropdownMenuItem><Play className="mr-2 h-4 w-4"/>Start</DropdownMenuItem>
+                    <DropdownMenuItem><Square className="mr-2 h-4 w-4"/>Stop</DropdownMenuItem>
+                    <DropdownMenuItem><Pencil className="mr-2 h-4 w-4"/>Edit</DropdownMenuItem>
                     <DropdownMenuSeparator/>
                     <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10">
-                      Delete
+                      <Trash2 className="mr-2 h-4 w-4"/>Delete
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
