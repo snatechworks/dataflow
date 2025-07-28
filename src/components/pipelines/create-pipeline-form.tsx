@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Loader2, Sparkles, CheckCircle, XCircle, Plus, Trash2, ArrowDown, GripVertical } from 'lucide-react';
+import { Loader2, Sparkles, CheckCircle, XCircle, Plus, Trash2, GripVertical, Settings } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { PipelineFlowPreview } from './pipeline-flow-preview';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 
 const processorSchema = z.object({
   type: z.string().min(1, "Brick type is required."),
@@ -77,7 +77,6 @@ export function CreatePipelineForm() {
     });
 
     const processors = form.watch('processors');
-    const sourceType = processors?.[0]?.type || 'N/A';
     
     const handleValidate = async () => {
         const values = form.getValues();
@@ -195,23 +194,23 @@ export function CreatePipelineForm() {
                         </CardHeader>
                         <CardContent className="space-y-4">
                             {fields.map((field, index) => (
-                                <Card key={field.id} className="bg-muted/30 relative pl-6">
-                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground">
+                                <Card key={field.id} className="bg-muted/30 relative pl-8">
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground cursor-grab">
                                         <GripVertical className="h-5 w-5" />
                                     </span>
-                                    <CardHeader className="py-3">
+                                    <CardHeader className="py-3 pr-4">
                                         <div className="flex items-center justify-between">
                                             <CardTitle className="text-base">
                                                 {index === 0 ? 'Source Brick' : `Transformation Brick #${index}`}
                                             </CardTitle>
                                            {index > 0 && (
-                                                <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
+                                                <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)} className="h-7 w-7">
                                                     <Trash2 className="h-4 w-4 text-destructive" />
                                                 </Button>
                                            )}
                                         </div>
                                     </CardHeader>
-                                    <CardContent className="grid md:grid-cols-2 gap-4">
+                                    <CardContent className="space-y-4 pr-4">
                                         <Controller
                                             control={form.control}
                                             name={`processors.${index}.type`}
@@ -235,28 +234,56 @@ export function CreatePipelineForm() {
                                                 </FormItem>
                                             )}
                                         />
-                                        <div />
-                                        <FormField
-                                            control={form.control}
-                                            name={`processors.${index}.properties`}
-                                            render={({ field }) => (
-                                                <FormItem className="md:col-span-2">
-                                                    <FormLabel>Instructions</FormLabel>
-                                                    <FormControl>
-                                                        <Textarea
-                                                            placeholder={brickPlaceholders[form.watch(`processors.${index}.type`)] || 'Describe what this brick should do...'}
-                                                            className="min-h-[100px] font-mono text-sm bg-background"
-                                                            {...field}
-                                                            onChange={(e) => {
-                                                                field.onChange(e);
-                                                                setValidationResult(null);
-                                                            }}
+
+                                        <div>
+                                            <div className="flex justify-between items-center mb-2">
+                                                <FormLabel>Instructions</FormLabel>
+                                                <Dialog>
+                                                    <DialogTrigger asChild>
+                                                        <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5">
+                                                            <Settings className="h-4 w-4" />
+                                                            Configure
+                                                        </Button>
+                                                    </DialogTrigger>
+                                                    <DialogContent>
+                                                        <DialogHeader>
+                                                            <DialogTitle>Configure Brick: {form.watch(`processors.${index}.type`)}</DialogTitle>
+                                                            <DialogDescription>
+                                                                Provide detailed instructions for how this data processing step should behave.
+                                                            </DialogDescription>
+                                                        </DialogHeader>
+                                                        <FormField
+                                                            control={form.control}
+                                                            name={`processors.${index}.properties`}
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormControl>
+                                                                        <Textarea
+                                                                            placeholder={brickPlaceholders[form.watch(`processors.${index}.type`)] || 'Describe what this brick should do...'}
+                                                                            className="min-h-[200px] font-mono text-sm bg-background"
+                                                                            {...field}
+                                                                            onChange={(e) => {
+                                                                                field.onChange(e);
+                                                                                setValidationResult(null);
+                                                                            }}
+                                                                        />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
                                                         />
-                                                    </FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
+                                                        <DialogFooter>
+                                                            <DialogClose asChild>
+                                                                <Button type="button">Done</Button>
+                                                            </DialogClose>
+                                                        </DialogFooter>
+                                                    </DialogContent>
+                                                </Dialog>
+                                            </div>
+                                            <p className="text-sm text-muted-foreground bg-background p-3 rounded-md border whitespace-pre-wrap break-words min-h-[60px]">
+                                                {form.watch(`processors.${index}.properties`) || <span className="text-muted-foreground/70">No instructions provided. Click 'Configure' to add them.</span>}
+                                            </p>
+                                        </div>
                                     </CardContent>
                                 </Card>
                             ))}
@@ -359,3 +386,5 @@ export function CreatePipelineForm() {
         </Form>
     );
 }
+
+    
