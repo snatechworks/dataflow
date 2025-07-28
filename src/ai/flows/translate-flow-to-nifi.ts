@@ -42,7 +42,7 @@ You will be given a JSON object describing the flow and the initial source type.
 
 **Bricks and their NiFi equivalents:**
 
-*   **Source (`sourceType` parameter):**
+*   **Source (\`sourceType\` parameter):**
     *   'HTTP': Start with a \`GetHTTP\` processor.
     *   'FILE': Start with a \`GetFile\` processor.
     *   'DATABASE': Start with a \`QueryDatabaseRecord\` processor.
