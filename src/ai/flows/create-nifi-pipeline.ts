@@ -11,13 +11,13 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
-export const CreateNifiPipelineInputSchema = z.object({
+const CreateNifiPipelineInputSchema = z.object({
     name: z.string().describe('The name for the new process group.'),
     nifiProcessGroup: z.string().describe('The ID of the parent process group where the new group will be created.'),
 });
 export type CreateNifiPipelineInput = z.infer<typeof CreateNifiPipelineInputSchema>;
 
-export const CreateNifiPipelineOutputSchema = z.object({
+const CreateNifiPipelineOutputSchema = z.object({
     success: z.boolean().describe('Whether the process group was created successfully.'),
     message: z.string().describe('A message indicating the result of the operation.'),
 });
