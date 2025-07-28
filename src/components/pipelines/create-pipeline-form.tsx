@@ -22,8 +22,8 @@ import { PipelineFlowPreview } from './pipeline-flow-preview';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { brickConfig, brickTypes, sourceBrickTypes, transformationBrickTypes, getBrickConfig } from '@/lib/brick-config';
 
-// Create a discriminated union schema
-const processorSchema = z.union(
+// Create a discriminated union schema for processors
+const processorUnionSchema = z.union(
   Object.entries(brickConfig).map(([key, config]) => 
     z.object({
       type: z.literal(key),
@@ -44,8 +44,8 @@ const sinkSchema = z.object({
 
 const formSchema = z.object({
   name: z.string().min(3, "Pipeline name must be at least 3 characters long."),
-  nifiProcessGroup: z.string().min(1, "NiFi Process Group is required."),
-  processors: z.array(processorSchema).min(1, "At least one brick (a source) is required."),
+  nifiProcessGroup: z.string().min(1, "NiFi Process Group ID is required."),
+  processors: z.array(processorUnionSchema).min(1, "At least one brick (a source) is required."),
   sink: sinkSchema,
 });
 
@@ -62,7 +62,7 @@ export function CreatePipelineForm() {
     const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),
         defaultValues: {
-            name: '',
+            name: 'My New ES Pipeline',
             nifiProcessGroup: 'root',
             processors: [
               brickConfig.HTTP.defaultValue
@@ -157,9 +157,9 @@ export function CreatePipelineForm() {
 
         return Object.entries(config.fields).map(([fieldName, fieldConfig]) => (
             <FormField
-                key={fieldName}
+                key={`${brickType}-${fieldName}`}
                 control={form.control}
-                name={`processors.${index}.properties.${fieldName}`}
+                name={`processors.${index}.properties.${fieldName}` as any}
                 render={({ field }) => (
                     <FormItem>
                         <FormLabel>{fieldConfig.label}</FormLabel>
@@ -197,7 +197,7 @@ export function CreatePipelineForm() {
                     <Card>
                         <CardHeader>
                             <CardTitle>Pipeline Details</CardTitle>
-                            <CardDescription>Provide a name and target NiFi Process Group for your pipeline.</CardDescription>
+                            <CardDescription>Provide a name and target NiFi Process Group ID for your pipeline.</CardDescription>
                         </CardHeader>
                         <CardContent className="grid gap-6 md:grid-cols-2">
                              <FormField
@@ -255,8 +255,8 @@ export function CreatePipelineForm() {
                                     <CardContent className="space-y-4 pr-4">
                                         <Controller
                                             control={form.control}
-                                            name={`processors.${index}.type`}
-                                            render={({ field, fieldState }) => (
+                                            name={`processors.${index}.type` as any}
+                                            render={({ field: typeField, fieldState }) => (
                                                 <FormItem>
                                                     <FormLabel>Brick Type</FormLabel>
                                                     <Select onValueChange={(value) => {
@@ -264,7 +264,7 @@ export function CreatePipelineForm() {
                                                         const newDefaultValue = brickConfig[newBrickType].defaultValue;
                                                         update(index, newDefaultValue);
                                                         setValidationResult(null);
-                                                    }} defaultValue={field.value}>
+                                                    }} defaultValue={typeField.value}>
                                                         <FormControl>
                                                         <SelectTrigger>
                                                             <SelectValue placeholder="Select a brick type" />
@@ -331,7 +331,7 @@ export function CreatePipelineForm() {
                     <Card>
                         <CardHeader>
                             <CardTitle>Data Sink</CardTitle>
-                            <CardDescription>Configure the final destination for your data.</CardDescription>
+                            <CardDescription>Configure the final destination for your data. Currently only Elasticsearch is supported.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <FormField
@@ -345,23 +345,48 @@ export function CreatePipelineForm() {
                                     </FormItem>
                                 )}
                             />
-                            <FormField
-                                control={form.control}
-                                name="sink.properties.index"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Elasticsearch Index</FormLabel>
-                                        <FormControl><Input placeholder="my-pipeline-index" {...field} /></FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
+                             <div className="grid grid-cols-2 gap-4">
+                                <FormField
+                                    control={form.control}
+                                    name="sink.properties.index"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Elasticsearch Index</FormLabel>
+                                            <FormControl><Input placeholder="my-pipeline-index" {...field} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="sink.properties.user"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Username (Optional)</FormLabel>
+                                            <FormControl><Input placeholder="es_user" {...field} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="sink.properties.password"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Password (Optional)</FormLabel>
+                                            <FormControl><Input type="password" {...field} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
                         </CardContent>
                     </Card>
 
                     <Card>
                         <CardHeader>
                             <CardTitle>Validation & Deployment</CardTitle>
+                            <CardDescription>Use our AI assistant to validate your flow's logic and translate it into an executable pipeline before deploying.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div className="flex items-center gap-2">
@@ -384,9 +409,9 @@ export function CreatePipelineForm() {
                         </CardContent>
                         <CardFooter className="border-t pt-6 flex-col items-start gap-4">
                             <p className="text-sm text-muted-foreground">
-                                After validation is successful, you can deploy the pipeline.
+                                After validation is successful, you can deploy the pipeline to NiFi.
                             </p>
-                            <Button type="submit" disabled={isDeploying || (validationResult && !validationResult.isValid)}>
+                            <Button type="submit" disabled={isDeploying || !validationResult?.isValid}>
                                 {isDeploying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                 Deploy Pipeline
                             </Button>

@@ -37,16 +37,32 @@ export async function validateConfigurationAction(input: ValidateConfigurationIn
 const CreatePipelineActionInputSchema = z.object({
   name: z.string(),
   nifiProcessGroup: z.string(),
-  flowDefinition: z.string(),
-  sourceType: z.string(),
-  sink: z.object({
-    type: z.string(),
-    properties: z.record(z.any()),
-  }),
+  translatedFlow: z.string(),
 });
 
-export async function createPipelineAction(input: CreateNifiPipelineInput): Promise<CreateNifiPipelineOutput> {
-  const parsedInput = CreatePipelineActionInputSchema.safeParse(input);
+export async function createPipelineAction(input: Omit<CreateNifiPipelineInput, 'sink'> & { sink: any, sourceType: string, flowDefinition: string }): Promise<CreateNifiPipelineOutput> {
+  
+  // First, get the translation from the validation flow
+  const validationResult = await validateConfigurationAction({
+    sourceType: input.sourceType,
+    flowDefinition: input.flowDefinition,
+    sink: input.sink
+  });
+
+  if (!validationResult.isValid || !validationResult.translatedFlow) {
+    return {
+      success: false,
+      message: `Pipeline deployment failed because the configuration is invalid. Feedback: ${validationResult.feedback}`,
+    };
+  }
+
+  const pipelinePayload: CreateNifiPipelineInput = {
+    name: input.name,
+    nifiProcessGroup: input.nifiProcessGroup,
+    translatedFlow: validationResult.translatedFlow,
+  };
+
+  const parsedInput = CreatePipelineActionInputSchema.safeParse(pipelinePayload);
   if (!parsedInput.success) {
     return {
       success: false,
