@@ -10,12 +10,11 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { translateFlowToNifi, type TranslateFlowToNifiInput } from './translate-flow-to-nifi';
 
 const CreateNifiPipelineInputSchema = z.object({
     name: z.string().describe('The name for the new process group.'),
     nifiProcessGroup: z.string().describe('The ID of the parent process group where the new group will be created.'),
-    flowDefinition: z.string().describe('A JSON string representing the high-level flow definition using abstract bricks.'),
+    flowDefinition: z.string().describe('A JSON string representing the full flow definition, including source, processors, and sink.'),
     sourceType: z.string().describe('The type of data source (e.g., HTTP, File, Database).'),
     sink: z.object({
         type: z.string().describe("The type of data sink (e.g., 'Elasticsearch')."),
@@ -49,17 +48,10 @@ const createNifiPipelineFlow = ai.defineFlow(
             };
         }
 
-        // Step 1: Translate the high-level flow into a NiFi-specific configuration
-        const translateInput: TranslateFlowToNifiInput = {
-            flowDefinition: input.flowDefinition,
-            sourceType: input.sourceType,
-            sink: input.sink,
-        };
-        const nifiConfig = await translateFlowToNifi(translateInput);
-
-        // For simplicity, we are creating a single process group. A real implementation would
-        // iterate through the translated processors and create them, connecting them sequentially.
-        // This example demonstrates the translation and creation of the main container.
+        // For this simplified version, we are creating a single process group
+        // and storing the user-defined flow in the comments. A full implementation
+        // would require a client-side NiFi topology builder to create and connect
+        // each processor based on the flowDefinition.
 
         const parentGroupId = input.nifiProcessGroup;
         const url = `${nifiApiUrl}/process-groups/${parentGroupId}/process-groups`;
@@ -74,8 +66,7 @@ const createNifiPipelineFlow = ai.defineFlow(
                     component: {
                         name: input.name,
                         position: { x: 0, y: 0 },
-                        // The translated configuration could be stored in the comments of the process group
-                        comments: `Translated from high-level definition. NiFi JSON Configuration:\n${JSON.stringify(nifiConfig, null, 2)}`
+                        comments: `High-level flow definition:\n\n${input.flowDefinition}`
                     },
                     revision: { version: 0 },
                 }),
@@ -85,7 +76,7 @@ const createNifiPipelineFlow = ai.defineFlow(
                 const data = await response.json();
                 return {
                     success: true,
-                    message: `Successfully created NiFi process group "${data.component.name}" with ID: ${data.id}. The translated processor configuration has been added to the process group comments.`,
+                    message: `Successfully created placeholder NiFi process group "${data.component.name}" with ID: ${data.id}. The full flow definition has been added to the process group comments.`,
                 };
             } else {
                 const errorText = await response.text();

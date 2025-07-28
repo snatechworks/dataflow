@@ -4,6 +4,7 @@ type BrickField = {
     label: string;
     placeholder: string;
     description: string;
+    type?: 'input' | 'textarea';
 };
 
 type BrickConfig = {
@@ -45,7 +46,7 @@ export const brickConfig = {
     'Database': {
         description: "Queries a database at regular intervals.",
         fields: {
-            query: { label: "SQL Query", placeholder: "e.g., SELECT * FROM orders", description: "The SQL query to execute." },
+            query: { label: "SQL Query", placeholder: "e.g., SELECT * FROM orders", description: "The SQL query to execute.", type: 'textarea' },
             interval: { label: "Polling Interval", placeholder: "e.g., 5 minutes", description: "How often to run the query." },
         },
         schema: z.object({
@@ -57,37 +58,39 @@ export const brickConfig = {
     },
     // Transformations
     'CSV to JSON': {
-        description: "Converts data from CSV format to JSON format. Provide high-level instructions.",
+        description: "Converts data from CSV format to JSON format. You must configure a CSVReader and a JSONRecordSetWriter controller service in NiFi.",
         fields: {
-            options: { label: "Conversion Options", placeholder: "e.g., Use first line as header", description: "Instructions for the CSV conversion (e.g., 'Use first line as header', 'Ignore comments starting with #')." },
+            'reader-service-id': { label: "CSV Reader Service ID", placeholder: "e.g., csv-reader-service", description: "The ID of your pre-configured CSVReader Controller Service in NiFi." },
+            'writer-service-id': { label: "JSON Writer Service ID", placeholder: "e.g., json-writer-service", description: "The ID of your pre-configured JSONRecordSetWriter Controller Service in NiFi." },
         },
         schema: z.object({
-            options: z.string().optional(),
+            'reader-service-id': z.string().min(1, 'Reader Service ID is required'),
+            'writer-service-id': z.string().min(1, 'Writer Service ID is required'),
         }),
-        defaultValue: { type: 'CSV to JSON', properties: { options: 'Use first line as header' } },
-        format: (props) => `Options: ${props.options || 'Default'}`,
+        defaultValue: { type: 'CSV to JSON', properties: { 'reader-service-id': 'csv-reader-service', 'writer-service-id': 'json-writer-service' } },
+        format: (props) => `Reader: ${props['reader-service-id']}\nWriter: ${props['writer-service-id']}`,
     },
     'XML to JSON': {
-        description: "Converts data from XML format to JSON format. You can provide an XSLT for complex transformations.",
+        description: "Converts data from XML format to JSON format using an XSLT transformation.",
         fields: {
-            options: { label: "XSLT or Options", placeholder: "e.g., Paste XSLT here or describe conversion", description: "For simple cases, AI will infer the transformation. For complex cases, provide an XSLT." },
+            xslt: { label: "XSLT Content", placeholder: "e.g., <xsl:stylesheet ...>", description: "The full XSLT stylesheet content for the transformation.", type: 'textarea' },
         },
         schema: z.object({
-            options: z.string().optional(),
+            xslt: z.string().optional(),
         }),
-        defaultValue: { type: 'XML to JSON', properties: { options: '' } },
-        format: (props) => `Options: ${props.options ? 'Custom XSLT/Options provided' : 'Default behavior'}`,
+        defaultValue: { type: 'XML to JSON', properties: { xslt: '' } },
+        format: (props) => `Options: ${props.xslt ? 'Custom XSLT provided' : 'Default behavior'}`,
     },
     'Excel to CSV': {
-        description: "Converts spreadsheet data from an Excel file to CSV format. The AI will generate a script to handle this.",
+        description: "Converts spreadsheet data from an Excel file to CSV format. This typically requires a script (e.g., Groovy) in an ExecuteScript processor.",
         fields: {
-            sheetName: { label: "Sheet Name", placeholder: "e.g., Sheet1", description: "The name of the Excel sheet to process." },
+            script: { label: "Groovy Script", placeholder: "e.g., import org.apache.poi...", description: "The full Groovy script content to perform the conversion.", type: 'textarea' },
         },
         schema: z.object({
-            sheetName: z.string().min(1, "Sheet name is required"),
+            script: z.string().min(1, "Script is required"),
         }),
-        defaultValue: { type: 'Excel to CSV', properties: { sheetName: 'Sheet1' } },
-        format: (props) => `Sheet Name: "${props.sheetName}"`,
+        defaultValue: { type: 'Excel to CSV', properties: { script: '' } },
+        format: (props) => `Script: ${props.script ? 'Provided' : 'Not Provided'}`,
     },
     'Split JSON': {
         description: "Splits a single JSON object or array into multiple FlowFiles using a JSONPath expression.",
@@ -101,12 +104,12 @@ export const brickConfig = {
         format: (props) => `JSONPath: ${props.jsonPath}`,
     },
     'Add/Modify Fields': {
-        description: "Uses a JOLT specification to transform the JSON structure. Describe the change you want or provide a full JOLT spec.",
+        description: "Uses a JOLT specification to transform the JSON structure. You must provide the full JOLT spec.",
         fields: {
-            joltSpec: { label: "JOLT Specification or Description", placeholder: "e.g., Add a new 'fullName' field by combining 'firstName' and 'lastName'", description: "The AI can generate the JOLT spec from a high-level description." },
+            joltSpec: { label: "JOLT Specification", placeholder: "e.g., [{...}]", description: "The full JOLT specification JSON.", type: 'textarea' },
         },
         schema: z.object({
-            joltSpec: z.string().min(1, "JOLT spec or description is required"),
+            joltSpec: z.string().min(1, "JOLT spec is required"),
         }),
         defaultValue: { type: 'Add/Modify Fields', properties: { joltSpec: '' } },
         format: (props) => `Spec: ${props.joltSpec.substring(0, 100)}${props.joltSpec.length > 100 ? '...' : ''}`,
@@ -114,7 +117,7 @@ export const brickConfig = {
     'Merge Records': {
         description: "Merges multiple records into a single batch based on size.",
         fields: {
-            batchSize: { label: "Batch Size", placeholder: "e.g., 1000", description: "The number of records to include in each batch." },
+            batchSize: { label: "Minimum Records", placeholder: "e.g., 1000", description: "The minimum number of records to include in a batch." },
         },
         schema: z.object({
             batchSize: z.string().min(1, "Batch size is required"),

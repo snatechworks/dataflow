@@ -10,7 +10,6 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { translateFlowToNifi, type TranslateFlowToNifiInput } from './translate-flow-to-nifi';
 
 const ValidateConfigurationInputSchema = z.object({
   flowDefinition: z.string().describe('The high-level flow definition as a JSON string, containing an array of abstract processors (bricks) with their structured properties.'),
@@ -40,7 +39,7 @@ const prompt = ai.definePrompt({
 
 Your task is to validate this high-level flow. Check for:
 1.  **Logical Flow**: Does the sequence of bricks make sense? (e.g., you can't split JSON before you've converted a source like CSV or XML to JSON). Is there a sensible path from the source to the sink?
-2.  **Brick Properties**: Are the properties for each brick plausible and correctly structured? For example, a Split JSON brick should have a 'jsonPath' property.
+2.  **Brick Properties**: Are the properties for each brick plausible and correctly structured? For example, a Split JSON brick should have a 'jsonPath' property. A CSV to JSON brick requires reader and writer service IDs.
 3.  **Completeness**: Is the flow likely to be functional? Does it handle data ingress, transformation, and egress logically?
 
 Based on your analysis, determine if the overall configuration is valid and set the \`isValid\` output field. Provide detailed, constructive feedback in the \`feedback\` field, explaining any issues found and suggesting improvements. Be specific.
@@ -64,33 +63,13 @@ const validateConfigurationFlow = ai.defineFlow(
     outputSchema: ValidateConfigurationOutputSchema,
   },
   async (input) => {
-    // First, do a logical check of the high-level flow.
     const logicalValidation = await prompt(input);
-    if (!logicalValidation.output?.isValid) {
-      return logicalValidation.output!;
+    if (!logicalValidation.output) {
+      return {
+        isValid: false,
+        feedback: "The AI validator failed to return a result. Please check the configuration."
+      }
     }
-    
-    // If the logic seems okay, try to translate it to a concrete NiFi configuration.
-    try {
-        const translateInput: TranslateFlowToNifiInput = {
-            flowDefinition: input.flowDefinition,
-            sourceType: input.sourceType,
-            sink: input.sink,
-        };
-        await translateFlowToNifi(translateInput);
-
-        // If translation is successful, return the positive feedback from the initial validation.
-        return {
-          isValid: true,
-          feedback: logicalValidation.output.feedback,
-        }
-
-    } catch (error: any) {
-        // If translation fails, it indicates a problem with the high-level definition.
-        return {
-            isValid: false,
-            feedback: `The flow logic seems plausible, but it failed to be translated into a concrete NiFi plan. This usually means there is a subtle error in the properties or flow structure. \n\nTranslation Error: ${error.message}`,
-        };
-    }
+    return logicalValidation.output;
   }
 );

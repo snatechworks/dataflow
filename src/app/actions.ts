@@ -34,15 +34,34 @@ export async function validateConfigurationAction(input: ValidateConfigurationIn
   }
 }
 
+const CreatePipelineActionInputSchema = z.object({
+  name: z.string(),
+  nifiProcessGroup: z.string(),
+  flowDefinition: z.string(),
+  sourceType: z.string(),
+  sink: z.object({
+    type: z.string(),
+    properties: z.record(z.any()),
+  }),
+});
+
 export async function createPipelineAction(input: CreateNifiPipelineInput): Promise<CreateNifiPipelineOutput> {
+  const parsedInput = CreatePipelineActionInputSchema.safeParse(input);
+  if (!parsedInput.success) {
+    return {
+      success: false,
+      message: `Invalid input provided for pipeline creation. Please check the data format. Errors: ${JSON.stringify(parsedInput.error.issues)}`,
+    };
+  }
+  
   try {
-    const result = await createNifiPipeline(input);
+    const result = await createNifiPipeline(parsedInput.data);
     return result;
-  } catch (error) {
+  } catch (error: any) {
     console.error("NiFi pipeline creation flow failed:", error);
     return {
       success: false,
-      message: "An unexpected error occurred while creating the pipeline. Please check the application logs for more details.",
+      message: `An unexpected error occurred while creating the pipeline: ${error.message}`,
     };
   }
 }

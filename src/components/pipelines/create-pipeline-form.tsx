@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Loader2, Sparkles, CheckCircle, XCircle, Plus, Trash2, GripVertical, Settings } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { Textarea } from '@/components/ui/textarea';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -83,13 +84,6 @@ export function CreatePipelineForm() {
         name: "processors",
     });
 
-    const formatPropertiesForAI = (processors: FormValues['processors']) => {
-        return processors.map(p => ({
-            type: p.type,
-            properties: p.properties // The properties are already structured, no need for custom formatting here.
-        }));
-    }
-
     const handleValidate = async () => {
         setValidationResult(null);
         const isFormValid = await form.trigger();
@@ -104,8 +98,7 @@ export function CreatePipelineForm() {
             return;
         }
         
-        const aiPayload = formatPropertiesForAI(values.processors);
-        const flowDefinition = JSON.stringify({ processors: aiPayload.slice(1) }, null, 2);
+        const flowDefinition = JSON.stringify({ processors: values.processors.slice(1) }, null, 2);
 
         setIsValidating(true);
         try {
@@ -125,13 +118,15 @@ export function CreatePipelineForm() {
     async function onSubmit(values: FormValues) {
         setIsDeploying(true);
         
-        const aiPayload = formatPropertiesForAI(values.processors);
-
         const pipelinePayload = {
             name: values.name,
             nifiProcessGroup: values.nifiProcessGroup,
             sourceType: values.processors[0].type,
-            flowDefinition: JSON.stringify({ processors: aiPayload.slice(1) }),
+            flowDefinition: JSON.stringify({
+                source: values.processors[0],
+                processors: values.processors.slice(1),
+                sink: values.sink
+            }, null, 2),
             sink: values.sink,
         }
 
@@ -169,7 +164,11 @@ export function CreatePipelineForm() {
                     <FormItem>
                         <FormLabel>{fieldConfig.label}</FormLabel>
                         <FormControl>
-                            <Input placeholder={fieldConfig.placeholder} {...field} value={field.value ?? ''} />
+                            { fieldConfig.type === 'textarea' ? (
+                                <Textarea placeholder={fieldConfig.placeholder} {...field} value={field.value ?? ''} rows={6} />
+                            ) : (
+                                <Input placeholder={fieldConfig.placeholder} {...field} value={field.value ?? ''} />
+                            )}
                         </FormControl>
                         <FormDescription>{fieldConfig.description}</FormDescription>
                         <FormMessage />
@@ -297,7 +296,7 @@ export function CreatePipelineForm() {
                                                                 {getBrickConfig(form.watch(`processors.${index}.type`))?.description}
                                                             </DialogDescription>
                                                         </DialogHeader>
-                                                        <div className="space-y-4 py-4">
+                                                        <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-4">
                                                             {renderBrickFields(index)}
                                                         </div>
                                                         <DialogFooter>
