@@ -1,9 +1,9 @@
 'use server';
 
 /**
- * @fileOverview Validates and translates a high-level pipeline configuration into a NiFi-specific flow.
+ * @fileOverview Validates a high-level pipeline configuration using AI.
  *
- * - validateConfiguration - A function that validates and translates the configuration.
+ * - validateConfiguration - A function that validates the configuration.
  * - ValidateConfigurationInput - The input type for the validateConfiguration function.
  * - ValidateConfigurationOutput - The return type for the validateConfiguration function.
  */
@@ -24,7 +24,6 @@ export type ValidateConfigurationInput = z.infer<typeof ValidateConfigurationInp
 const ValidateConfigurationOutputSchema = z.object({
   isValid: z.boolean().describe('Whether the configuration is valid or not.'),
   feedback: z.string().describe('Feedback on the configuration, including potential issues, correctness of processor properties, and flow logic.'),
-  translatedFlow: z.string().optional().describe('The translated, NiFi-specific JSON configuration for the entire flow if validation is successful.'),
 });
 export type ValidateConfigurationOutput = z.infer<typeof ValidateConfigurationOutputSchema>;
 
@@ -33,59 +32,22 @@ export async function validateConfiguration(input: ValidateConfigurationInput): 
 }
 
 const prompt = ai.definePrompt({
-  name: 'validateAndTranslateConfigurationPrompt',
+  name: 'validatePipelineLogicPrompt',
   input: {schema: ValidateConfigurationInputSchema},
   output: {schema: ValidateConfigurationOutputSchema},
-  prompt: `You are an AI expert in Apache NiFi data pipelines. Your task is to act as both a validator and a translator. You will receive a high-level flow definition using abstract "bricks", a source type, and a sink configuration.
+  prompt: `You are an AI expert in data processing pipelines. Your task is to validate a high-level flow definition.
 
-**Your two primary goals are:**
-1.  **Validate the Flow:** Check the logical sequence of bricks. Does the flow make sense? (e.g., you can't split JSON before converting the source data to JSON). Are the properties for each brick plausible?
-2.  **Translate to NiFi JSON:** If the flow is valid, you MUST translate the entire high-level definition into a detailed, executable NiFi JSON structure. This structure will be used to create processors and controller services via the NiFi API.
+You will receive a flow definition using abstract "bricks", a source type, and a sink configuration.
+
+Your only goal is to **Validate the Flow Logic**. Check the logical sequence of bricks. Does the flow make sense? For example, you can't split JSON before converting the source data to JSON. Are the properties for each brick plausible for that type of operation?
 
 **Validation Logic:**
-*   Analyze the sequence of bricks. A common mistake is trying to process JSON before the data is in JSON format. For example, if the source is CSV, a 'CSV to JSON' brick must appear before a 'Split JSON' brick.
-*   Check the properties for each brick for any obvious errors or inconsistencies.
+*   Analyze the sequence of bricks. A common mistake is trying to process data in one format when it's actually in another. For example, if the source is CSV, a 'CSV to JSON' brick must appear before a 'Split JSON' brick.
+*   Check the properties for each brick for any obvious logical errors.
 *   Based on your analysis, set \`isValid\` to \`true\` or \`false\`.
 *   Provide detailed, constructive feedback in the \`feedback\` field. If invalid, explain exactly why. If valid, confirm that the logic is sound.
 
-**NiFi Translation Rules (VERY IMPORTANT):**
-If \`isValid\` is \`true\`, you MUST populate the \`translatedFlow\` field with a JSON string. This JSON should contain two keys: \`processors\` and \`controllerServices\`.
-
-**Bricks and their NiFi Equivalents:**
-
-*   **Source (\`sourceType\` parameter):**
-    *   'HTTP': Creates one processor: \`GetHTTP\`. The brick's \`port\` property maps to \`Listen Port\`, and \`path\` maps to \`Base Path\`.
-    *   'File': Creates one processor: \`GetFile\`. The brick's \`path\` property maps to \`Input Directory\`.
-    *   'Database': Creates one processor: \`QueryDatabaseRecord\`. The brick's \`query\` property maps to the processor's \`SQL select query\` property. It will also require a \`DBCPConnectionPool\` controller service. Generate a default one and link it.
-
-*   **Transformation Bricks (\`flowDefinition.processors\` array):**
-    *   'CSV to JSON': Creates one processor: \`ConvertRecord\`. This requires two controller services: a \`CSVReader\` and a \`JSONRecordSetWriter\`. You must generate the configurations for these services and link them to the processor.
-    *   'XML to JSON': Creates one processor: \`TransformXml\`. The brick's \`xslt\` property maps to the \`XSLT file content\` property.
-    *   'Excel to CSV': Creates one processor: \`ExecuteScript\`. Use the brick's \`script\` property as the \`Script Body\`. The script should be written in Groovy and use the Apache POI library to convert Excel to CSV.
-    *   'Split JSON': Creates one processor: \`SplitJson\`. The brick's \`jsonPath\` property maps to \`JsonPath Expression\`.
-    *   'Add/Modify Fields': Creates one processor: \`JoltTransformJSON\`. The brick's \`joltSpec\` property maps to the \`Jolt Specification\` property.
-    *   'Merge Records': Creates one processor: \`MergeRecord\`. The brick's \`batchSize\` property maps to the \`Minimum Number of Records\` property.
-
-*   **Sink (\`sink\` parameter):**
-    *   'Elasticsearch': This is the final step. Create a \`PutElasticsearchHttp\` processor.
-    *   This processor requires an \`ElasticSearchClientService\`. You must generate a new controller service of type \`ElasticSearchClientServiceImpl\`.
-    *   The sink's \`elasticsearchUrl\` property maps to the \`Elasticsearch URL\` property in the client service.
-    *   The sink's \`index\` property maps to the \`Index\` property in the \`PutElasticsearchHttp\` processor itself.
-    *   The \`user\` and \`password\` properties map to the client service's username and password properties.
-
-**Example Output Structure for \`translatedFlow\`:**
-\`\`\`json
-{
-  "processors": [
-    { "type": "GetHTTP", "name": "Ingest from HTTP", "properties": { "Listen Port": "8080", "Base Path": "/data" } },
-    { "type": "SplitJson", "name": "Split Records", "properties": { "JsonPath Expression": "$.records[*]" } },
-    { "type": "PutElasticsearchHttp", "name": "Send to ES", "properties": { "Index": "my-data-index", "Elastic Search Client Service": "es-client-service-1" } }
-  ],
-  "controllerServices": [
-    { "type": "ElasticSearchClientServiceImpl", "name": "es-client-service-1", "properties": { "Elasticsearch URL": "http://localhost:9200", "Username": "user", "Password": "password" } }
-  ]
-}
-\`\`\`
+**You are NOT translating or executing anything. You are only providing feedback on the logical structure.**
 
 ---
 **User's Configuration to Analyze:**
@@ -116,6 +78,8 @@ const validateConfigurationFlow = ai.defineFlow(
         feedback: "The AI validator failed to return a result. Please check the configuration."
       }
     }
-    return result.output;
+    // Since we are not translating, we remove the translatedFlow property.
+    const { translatedFlow, ...output } = result.output as any;
+    return output;
   }
 );

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Loader2, Sparkles, CheckCircle, XCircle, Plus, Trash2, GripVertical, Settings } from 'lucide-react';
+import { Loader2, Sparkles, CheckCircle, XCircle, Plus, Trash2, GripVertical, Settings, Play } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { validateConfigurationAction, createPipelineAction } from '@/app/actions';
+import { validateConfigurationAction, runPipelineAction } from '@/app/actions';
 import type { ValidateConfigurationOutput } from '@/ai/flows/validate-configuration';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -44,7 +44,6 @@ const sinkSchema = z.object({
 
 const formSchema = z.object({
   name: z.string().min(3, "Pipeline name must be at least 3 characters long."),
-  nifiProcessGroup: z.string().min(1, "NiFi Process Group ID is required."),
   processors: z.array(processorUnionSchema).min(1, "At least one brick (a source) is required."),
   sink: sinkSchema,
 });
@@ -55,7 +54,7 @@ type FormValues = z.infer<typeof formSchema>;
 export function CreatePipelineForm() {
     const router = useRouter();
     const { toast } = useToast();
-    const [isDeploying, setIsDeploying] = useState(false);
+    const [isRunning, setIsRunning] = useState(false);
     const [isValidating, setIsValidating] = useState(false);
     const [validationResult, setValidationResult] = useState<ValidateConfigurationOutput | null>(null);
 
@@ -63,7 +62,6 @@ export function CreatePipelineForm() {
         resolver: zodResolver(formSchema),
         defaultValues: {
             name: 'My New ES Pipeline',
-            nifiProcessGroup: 'root',
             processors: [
               brickConfig.HTTP.defaultValue
             ],
@@ -98,7 +96,7 @@ export function CreatePipelineForm() {
             return;
         }
         
-        const flowDefinition = JSON.stringify({ processors: values.processors.slice(1) }, null, 2);
+        const flowDefinition = JSON.stringify({ processors: values.processors }, null, 2);
 
         setIsValidating(true);
         try {
@@ -116,38 +114,35 @@ export function CreatePipelineForm() {
     };
     
     async function onSubmit(values: FormValues) {
-        setIsDeploying(true);
+        setIsRunning(true);
         
         const pipelinePayload = {
             name: values.name,
-            nifiProcessGroup: values.nifiProcessGroup,
             sourceType: values.processors[0].type,
             flowDefinition: JSON.stringify({
-                source: values.processors[0],
-                processors: values.processors.slice(1),
-                sink: values.sink
+                processors: values.processors,
             }, null, 2),
             sink: values.sink,
         }
 
-        const result = await createPipelineAction(pipelinePayload);
+        const result = await runPipelineAction(pipelinePayload);
         
         if (result.success) {
             toast({
-                title: 'Deployment Successful',
+                title: 'Pipeline Run Successful',
                 description: result.message,
             });
             router.push('/');
         } else {
             toast({
                 variant: 'destructive',
-                title: 'Deployment Failed',
+                title: 'Pipeline Run Failed',
                 description: result.message,
                 duration: 9000,
             });
         }
 
-        setIsDeploying(false);
+        setIsRunning(false);
     }
 
     const renderBrickFields = (index: number) => {
@@ -197,9 +192,9 @@ export function CreatePipelineForm() {
                     <Card>
                         <CardHeader>
                             <CardTitle>Pipeline Details</CardTitle>
-                            <CardDescription>Provide a name and target NiFi Process Group ID for your pipeline.</CardDescription>
+                            <CardDescription>Provide a name for your pipeline.</CardDescription>
                         </CardHeader>
-                        <CardContent className="grid gap-6 md:grid-cols-2">
+                        <CardContent className="grid gap-6 md:grid-cols-1">
                              <FormField
                                 control={form.control}
                                 name="name"
@@ -208,19 +203,6 @@ export function CreatePipelineForm() {
                                         <FormLabel>Pipeline Name</FormLabel>
                                         <FormControl>
                                             <Input placeholder="e.g., Customer Orders API Ingestion" {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                            <FormField
-                                control={form.control}
-                                name="nifiProcessGroup"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>NiFi Process Group ID</FormLabel>
-                                        <FormControl>
-                                            <Input placeholder="e.g., root" {...field} />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>
@@ -385,8 +367,8 @@ export function CreatePipelineForm() {
 
                     <Card>
                         <CardHeader>
-                            <CardTitle>Validation & Deployment</CardTitle>
-                            <CardDescription>Use our AI assistant to validate your flow's logic and translate it into an executable pipeline before deploying.</CardDescription>
+                            <CardTitle>Validation & Execution</CardTitle>
+                            <CardDescription>Use our AI assistant to validate your flow's logic before running the pipeline.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div className="flex items-center gap-2">
@@ -409,11 +391,11 @@ export function CreatePipelineForm() {
                         </CardContent>
                         <CardFooter className="border-t pt-6 flex-col items-start gap-4">
                             <p className="text-sm text-muted-foreground">
-                                After validation is successful, you can deploy the pipeline to NiFi.
+                                After validation is successful, you can run the pipeline. This will execute the defined data flow.
                             </p>
-                            <Button type="submit" disabled={isDeploying || !validationResult?.isValid}>
-                                {isDeploying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Deploy Pipeline
+                            <Button type="submit" disabled={isRunning || !validationResult?.isValid}>
+                                {isRunning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+                                Run Pipeline
                             </Button>
                         </CardFooter>
                     </Card>

@@ -1,7 +1,7 @@
 "use server";
 
 import { validateConfiguration, type ValidateConfigurationInput, type ValidateConfigurationOutput } from "@/ai/flows/validate-configuration";
-import { createNifiPipeline, type CreateNifiPipelineInput, type CreateNifiPipelineOutput } from "@/ai/flows/create-nifi-pipeline";
+import { executePipeline, type ExecutePipelineInput, type ExecutePipelineOutput } from "@/ai/flows/execute-pipeline";
 import { z } from 'zod';
 
 const ValidateActionInputSchema = z.object({
@@ -34,50 +34,35 @@ export async function validateConfigurationAction(input: ValidateConfigurationIn
   }
 }
 
-const CreatePipelineActionInputSchema = z.object({
+const RunPipelineActionInputSchema = z.object({
   name: z.string(),
-  nifiProcessGroup: z.string(),
-  translatedFlow: z.string(),
+  flowDefinition: z.string(),
+  sourceType: z.string(),
+  sink: z.object({
+    type: z.string(),
+    properties: z.record(z.any()),
+  }),
 });
 
-export async function createPipelineAction(input: Omit<CreateNifiPipelineInput, 'sink'> & { sink: any, sourceType: string, flowDefinition: string }): Promise<CreateNifiPipelineOutput> {
+export async function runPipelineAction(input: ExecutePipelineInput): Promise<ExecutePipelineOutput> {
   
-  // First, get the translation from the validation flow
-  const validationResult = await validateConfigurationAction({
-    sourceType: input.sourceType,
-    flowDefinition: input.flowDefinition,
-    sink: input.sink
-  });
-
-  if (!validationResult.isValid || !validationResult.translatedFlow) {
-    return {
-      success: false,
-      message: `Pipeline deployment failed because the configuration is invalid. Feedback: ${validationResult.feedback}`,
-    };
-  }
-
-  const pipelinePayload: CreateNifiPipelineInput = {
-    name: input.name,
-    nifiProcessGroup: input.nifiProcessGroup,
-    translatedFlow: validationResult.translatedFlow,
-  };
-
-  const parsedInput = CreatePipelineActionInputSchema.safeParse(pipelinePayload);
+  const parsedInput = RunPipelineActionInputSchema.safeParse(input);
   if (!parsedInput.success) {
     return {
       success: false,
-      message: `Invalid input provided for pipeline creation. Please check the data format. Errors: ${JSON.stringify(parsedInput.error.issues)}`,
+      message: `Invalid input provided for pipeline execution. Please check the data format. Errors: ${JSON.stringify(parsedInput.error.issues)}`,
     };
   }
   
   try {
-    const result = await createNifiPipeline(parsedInput.data);
+    const result = await executePipeline(parsedInput.data);
     return result;
-  } catch (error: any) {
-    console.error("NiFi pipeline creation flow failed:", error);
+  } catch (error: any)
+  {
+    console.error("Pipeline execution flow failed:", error);
     return {
       success: false,
-      message: `An unexpected error occurred while creating the pipeline: ${error.message}`,
+      message: `An unexpected error occurred while running the pipeline: ${error.message}`,
     };
   }
 }

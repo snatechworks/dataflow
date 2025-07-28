@@ -20,20 +20,18 @@ type BrickConfig = {
 export const brickConfig = {
     // Sources
     'HTTP': {
-        description: "Listens for incoming HTTP requests on a specific port and path. NiFi's GetHTTP processor will be used.",
+        description: "Listens for incoming HTTP POST requests on a specific path. This will trigger the pipeline.",
         fields: {
-            port: { label: "Listening Port", placeholder: "e.g., 8080", description: "The port number to listen on." },
-            path: { label: "Base Path", placeholder: "e.g., /data", description: "The URL base path to listen on." },
+            path: { label: "Webhook Path", placeholder: "e.g., /webhooks/new-order", description: "The unique path that will trigger this pipeline." },
         },
         schema: z.object({
-            port: z.string().min(1, 'Port is required').regex(/^\d+$/, 'Port must be a number.'),
             path: z.string().min(1, 'Path is required').startsWith('/', "Path must start with '/'"),
         }),
-        defaultValue: { type: 'HTTP', properties: { port: '8080', path: '/data' } },
-        format: (props) => `Port: ${props.port}\nPath: "${props.path}"`,
+        defaultValue: { type: 'HTTP', properties: { path: '/webhooks/new-data' } },
+        format: (props) => `Path: "${props.path}"`,
     },
     'File': {
-        description: "Watches a directory for new files to process. NiFi's GetFile processor will be used.",
+        description: "Watches a directory for new files to process. (Simulated)",
         fields: {
             path: { label: "Input Directory", placeholder: "e.g., /var/data/input", description: "The full path to the directory to watch." },
         },
@@ -41,57 +39,53 @@ export const brickConfig = {
             path: z.string().min(1, "Path is required"),
         }),
         defaultValue: { type: 'File', properties: { path: '/var/data/input' } },
-        format: (props) => `Input Directory: "${props.path}"`,
+        format: (props) => `Directory: "${props.path}"`,
     },
     'Database': {
-        description: "Queries a database at regular intervals. NiFi's QueryDatabaseRecord will be used.",
+        description: "Queries a database for new or updated records.",
         fields: {
             query: { label: "SQL Query", placeholder: "e.g., SELECT * FROM orders WHERE updated_at > ?", description: "The SQL query to execute. Use '?' for incremental state.", type: 'textarea' },
-            interval: { label: "Polling Interval", placeholder: "e.g., 5 minutes", description: "How often to run the query (e.g., 60 sec, 5 min)." },
+            connectionString: { label: "Connection String", placeholder: "e.g., postgresql://user:pass@host:port/db", description: "Database connection URI." },
         },
         schema: z.object({
             query: z.string().min(1, "Query is required"),
-            interval: z.string().min(1, "Interval is required"),
+            connectionString: z.string().min(1, "Connection string is required"),
         }),
-        defaultValue: { type: 'Database', properties: { query: 'SELECT * FROM orders', interval: '5 minutes' } },
-        format: (props) => `Query: "${props.query}"\nInterval: ${props.interval}`,
+        defaultValue: { type: 'Database', properties: { query: 'SELECT * FROM new_users', connectionString: '' } },
+        format: (props) => `Query: "${props.query.substring(0, 50)}..."`,
     },
     // Transformations
     'CSV to JSON': {
-        description: "Converts data from CSV format to JSON. This will create a ConvertRecord processor with CSVReader and JSONRecordSetWriter services.",
+        description: "Converts data from CSV format to JSON.",
         fields: {
-            'csv-reader-config': { label: "CSV Reader Config (JSON)", placeholder: 'e.g., {"schema-access-strategy": "infer-schema"}', description: 'JSON configuration for the CSVReader controller service.', type: 'textarea'},
+            delimiter: { label: "Delimiter", placeholder: "e.g., ,", description: "The character separating columns." },
         },
         schema: z.object({
-            'csv-reader-config': z.string().optional(),
+            delimiter: z.string().max(1).optional().default(','),
         }),
-        defaultValue: { type: 'CSV to JSON', properties: { 'csv-reader-config': '{\n  "schema-access-strategy": "infer-schema",\n  "header-derived-schema": "true"\n}' } },
-        format: (props) => `Uses a dynamically configured CSVReader and JSONRecordSetWriter.`,
+        defaultValue: { type: 'CSV to JSON', properties: { delimiter: ',' } },
+        format: (props) => `Delimiter: "${props.delimiter}"`,
     },
     'XML to JSON': {
-        description: "Converts data from XML format to JSON format using an XSLT transformation. NiFi's TransformXml processor will be used.",
-        fields: {
-            xslt: { label: "XSLT Content", placeholder: "Leave empty for default XML-to-JSON, or provide a custom XSLT.", description: "The full XSLT stylesheet content for the transformation.", type: 'textarea' },
-        },
-        schema: z.object({
-            xslt: z.string().optional(),
-        }),
-        defaultValue: { type: 'XML to JSON', properties: { xslt: '' } },
-        format: (props) => `Options: ${props.xslt ? 'Custom XSLT provided' : 'Default NiFi XML to JSON'}`,
+        description: "Converts data from XML format to JSON format.",
+        fields: {},
+        schema: z.object({}),
+        defaultValue: { type: 'XML to JSON', properties: {} },
+        format: () => `Standard XML to JSON conversion`,
     },
     'Excel to CSV': {
-        description: "Converts spreadsheet data from an Excel file (.xlsx) to CSV format. This requires a custom script in an ExecuteScript processor.",
+        description: "Converts spreadsheet data from an Excel file (.xlsx) to CSV format.",
         fields: {
-            script: { label: "Groovy Script (Optional)", placeholder: "Leave empty to use a default Apache POI-based script.", description: "The full Groovy script content to perform the conversion.", type: 'textarea' },
+            sheetName: { label: "Sheet Name (Optional)", placeholder: "e.g., Sheet1", description: "The name of the sheet to convert. Defaults to the first sheet." },
         },
         schema: z.object({
-            script: z.string().optional(),
+            sheetName: z.string().optional(),
         }),
-        defaultValue: { type: 'Excel to CSV', properties: { script: '' } },
-        format: (props) => `Script: ${props.script ? 'Custom script provided' : 'Default Excel script'}`,
+        defaultValue: { type: 'Excel to CSV', properties: { sheetName: '' } },
+        format: (props) => `Sheet: ${props.sheetName || 'First available'}`,
     },
     'Split JSON': {
-        description: "Splits a single JSON object or array into multiple FlowFiles using a JSONPath expression. NiFi's SplitJson processor will be used.",
+        description: "Splits a single JSON object or array into multiple records using a JSONPath expression.",
         fields: {
             jsonPath: { label: "JSONPath Expression", placeholder: "e.g., $.customers[*]", description: "The JSONPath to select the elements to split." },
         },
@@ -102,28 +96,26 @@ export const brickConfig = {
         format: (props) => `JSONPath: ${props.jsonPath}`,
     },
     'Add/Modify Fields': {
-        description: "Uses a JOLT specification to transform the JSON structure. NiFi's JoltTransformJSON processor will be used.",
+        description: "Adds, removes, or modifies fields in a JSON object. Provide a JSON object representing the modifications.",
         fields: {
-            joltSpec: { label: "JOLT Specification", placeholder: '[{\n  "operation": "shift",\n  "spec": { ... }\n}]', description: "The full JOLT specification JSON.", type: 'textarea' },
+            modificationSpec: { label: "Modification (JSON)", placeholder: '{\n  "new_field": "static_value",\n  "existing_field": "${original.field}"\n}', description: "JSON object detailing the changes.", type: 'textarea' },
         },
         schema: z.object({
-            joltSpec: z.string().min(1, "JOLT spec is required"),
+            modificationSpec: z.string().min(1, "Modification spec is required"),
         }),
-        defaultValue: { type: 'Add/Modify Fields', properties: { joltSpec: '' } },
-        format: (props) => `Spec: ${props.joltSpec.substring(0, 100)}${props.joltSpec.length > 100 ? '...' : ''}`,
+        defaultValue: { type: 'Add/Modify Fields', properties: { modificationSpec: '{\n  "processed_at": "${timestamp()}"\n}' } },
+        format: (props) => `Spec: ${props.modificationSpec.substring(0, 100)}${props.modificationSpec.length > 100 ? '...' : ''}`,
     },
     'Merge Records': {
-        description: "Merges multiple records into a single batch based on size. NiFi's MergeRecord processor will be used.",
+        description: "Merges multiple records into a single batch before sending to the sink.",
         fields: {
-            batchSize: { label: "Minimum Records", placeholder: "e.g., 1000", description: "The minimum number of records to include in a batch." },
-            maxBinAge: { label: "Max Bin Age", placeholder: "e.g., 30 sec", description: "The maximum age of a bin before it is flushed." },
+            batchSize: { label: "Batch Size", placeholder: "e.g., 1000", description: "The number of records to include in a batch." },
         },
         schema: z.object({
             batchSize: z.string().min(1, "Batch size is required").regex(/^\d+$/, 'Batch size must be a number.'),
-            maxBinAge: z.string().optional(),
         }),
-        defaultValue: { type: 'Merge Records', properties: { batchSize: '1000', maxBinAge: '30 sec' } },
-        format: (props) => `Min Records: ${props.batchSize}\nMax Age: ${props.maxBinAge || 'Not set'}`,
+        defaultValue: { type: 'Merge Records', properties: { batchSize: '1000' } },
+        format: (props) => `Batch Size: ${props.batchSize}`,
     },
 } satisfies BrickConfig;
 
