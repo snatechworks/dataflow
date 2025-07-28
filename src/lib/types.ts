@@ -11,9 +11,14 @@ export interface Pipeline {
   esIndex: string;
 }
 
+export interface Processor {
+  type: string;
+  properties: string; // JSON string
+}
+
 export interface NifiPipeline {
     name: string;
     nifiProcessGroup: string;
     sourceType: PipelineSourceType;
-    config: string;
+    config: string; // JSON string of { processors: Processor[] }
 }
