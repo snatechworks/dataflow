@@ -4,6 +4,7 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ArrowDown, Database, FileText, Globe, Cpu, Combine, GitCommitHorizontal, VenetianMask } from 'lucide-react';
 import { cn } from "@/lib/utils";
+import { getBrickConfig } from "@/lib/brick-config";
 
 const brickIcons: Record<string, React.ReactElement> = {
     // Sources
@@ -27,40 +28,45 @@ const BrickIcon = ({ type }: { type: string }) => {
 };
 
 
-const BrickCard = ({ type, properties, isFirst, isLast, isSink }: { type: string, properties: string, isFirst?: boolean, isLast?: boolean, isSink?: boolean }) => (
-    <div className="flex flex-col items-center">
-        <Card className={cn(
-            "w-full bg-background shadow-md border-primary/20",
-            isSink && "border-green-500/40"
-        )}>
-            <CardHeader className="flex flex-row items-center gap-4 space-y-0 p-4">
-                <div className={cn(
-                    "flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary",
-                    isSink && "bg-green-500/10 text-green-600"
-                )}>
-                    <BrickIcon type={type} />
-                </div>
-                <div>
-                    <CardTitle className="text-base font-semibold">{type}</CardTitle>
-                </div>
-            </CardHeader>
-            <CardContent className="px-4 pb-4 pt-0">
-                <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md font-mono whitespace-pre-wrap break-words">
-                    {properties || (isSink ? 'Sink Configuration' : 'No instructions provided.')}
-                </p>
-            </CardContent>
-        </Card>
-        {!isLast && (
-            <div className="my-2 text-muted-foreground/50">
-                <ArrowDown className="w-6 h-6" />
-            </div>
-        )}
-    </div>
-);
+const BrickCard = ({ type, properties, isFirst, isLast, isSink }: { type: string, properties: any, isFirst?: boolean, isLast?: boolean, isSink?: boolean }) => {
+    const config = getBrickConfig(type);
+    const formattedProperties = isSink ? formatSinkProperties(properties) : config?.format(properties);
 
-function formatSinkProperties(sink: any): string {
-    if (!sink || !sink.properties) return '';
-    const { elasticsearchUrl, index } = sink.properties;
+    return (
+        <div className="flex flex-col items-center">
+            <Card className={cn(
+                "w-full bg-background shadow-md border-primary/20",
+                isSink && "border-green-500/40"
+            )}>
+                <CardHeader className="flex flex-row items-center gap-4 space-y-0 p-4">
+                    <div className={cn(
+                        "flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary",
+                        isSink && "bg-green-500/10 text-green-600"
+                    )}>
+                        <BrickIcon type={type} />
+                    </div>
+                    <div>
+                        <CardTitle className="text-base font-semibold">{type}</CardTitle>
+                    </div>
+                </CardHeader>
+                <CardContent className="px-4 pb-4 pt-0">
+                    <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md font-mono whitespace-pre-wrap break-words">
+                        {formattedProperties || (isSink ? 'Sink Configuration' : 'No instructions provided.')}
+                    </div>
+                </CardContent>
+            </Card>
+            {!isLast && (
+                <div className="my-2 text-muted-foreground/50">
+                    <ArrowDown className="w-6 h-6" />
+                </div>
+            )}
+        </div>
+    );
+};
+
+function formatSinkProperties(sinkProperties: any): string {
+    if (!sinkProperties) return '';
+    const { elasticsearchUrl, index } = sinkProperties;
     return `URL: ${elasticsearchUrl}\nIndex: ${index}`;
 }
 
@@ -87,7 +93,7 @@ export function PipelineFlowPreview({ processors, sink }: { processors: any[], s
             ))}
             <BrickCard
                 type={sink.type}
-                properties={formatSinkProperties(sink)}
+                properties={sink.properties}
                 isLast
                 isSink
             />

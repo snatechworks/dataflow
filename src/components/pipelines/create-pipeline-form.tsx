@@ -9,9 +9,8 @@ import { useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { validateConfigurationAction, createPipelineAction } from '@/app/actions';
 import type { ValidateConfigurationOutput } from '@/ai/flows/validate-configuration';
@@ -20,11 +19,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { PipelineFlowPreview } from './pipeline-flow-preview';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { brickConfig, brickTypes, sourceBrickTypes, transformationBrickTypes, getBrickConfig } from '@/lib/brick-config';
 
-const processorSchema = z.object({
-  type: z.string().min(1, "Brick type is required."),
-  properties: z.string().describe("High-level description of the brick's function."),
-});
+// Create a discriminated union schema
+const processorSchema = z.union(
+  Object.entries(brickConfig).map(([key, config]) => 
+    z.object({
+      type: z.literal(key),
+      properties: config.schema,
+    })
+  )
+);
 
 const sinkSchema = z.object({
   type: z.literal('Elasticsearch'),
@@ -58,7 +63,9 @@ export function CreatePipelineForm() {
         defaultValues: {
             name: '',
             nifiProcessGroup: 'root',
-            processors: [{ type: 'HTTP', properties: 'Listen on port 8080 and path /data' }],
+            processors: [
+              brickConfig.HTTP.defaultValue
+            ],
             sink: {
                 type: 'Elasticsearch',
                 properties: {
@@ -71,23 +78,36 @@ export function CreatePipelineForm() {
         },
     });
 
-    const { fields, append, remove } = useFieldArray({
+    const { fields, append, remove, update } = useFieldArray({
         control: form.control,
         name: "processors",
     });
 
-    const processors = form.watch('processors');
-    
+    const formatPropertiesForAI = (processors: FormValues['processors']) => {
+        return processors.map(p => ({
+            type: p.type,
+            properties: getBrickConfig(p.type)?.format(p.properties)
+        }));
+    }
+
     const handleValidate = async () => {
+        setValidationResult(null);
+        const isFormValid = await form.trigger();
+        if (!isFormValid) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Please fix the errors in the form before validating.' });
+            return;
+        }
+
         const values = form.getValues();
         if (!values.processors || values.processors.length === 0) {
             toast({ variant: 'destructive', title: 'Error', description: 'At least one brick (a source) is required to validate.' });
             return;
         }
-        const flowDefinition = JSON.stringify({ processors: values.processors.slice(1) }, null, 2);
+        
+        const aiPayload = formatPropertiesForAI(values.processors);
+        const flowDefinition = JSON.stringify({ processors: aiPayload.slice(1) }, null, 2);
 
         setIsValidating(true);
-        setValidationResult(null);
         try {
             const result = await validateConfigurationAction({ 
                 flowDefinition, 
@@ -105,11 +125,13 @@ export function CreatePipelineForm() {
     async function onSubmit(values: FormValues) {
         setIsDeploying(true);
         
+        const aiPayload = formatPropertiesForAI(values.processors);
+
         const pipelinePayload = {
             name: values.name,
             nifiProcessGroup: values.nifiProcessGroup,
             sourceType: values.processors[0].type,
-            flowDefinition: JSON.stringify({ processors: values.processors.slice(1) }),
+            flowDefinition: JSON.stringify({ processors: aiPayload.slice(1) }),
             sink: values.sink,
         }
 
@@ -132,21 +154,42 @@ export function CreatePipelineForm() {
 
         setIsDeploying(false);
     }
-    
-    const sourceBricks = ['HTTP', 'File', 'Database'];
-    const transformationBricks = ['CSV to JSON', 'XML to JSON', 'Excel to CSV', 'Split JSON', 'Add/Modify Fields', 'Merge Records'];
 
-    const brickPlaceholders: Record<string, string> = {
-        'HTTP': 'e.g., Listen on port 8080 and path /data',
-        'File': 'e.g., Watch directory /var/data/input for new files.',
-        'Database': 'e.g., Query "SELECT * FROM orders" every 5 minutes.',
-        'CSV to JSON': 'e.g., Use first line as header. Trim whitespace from values.',
-        'XML to JSON': 'e.g., Provide path to XSLT file. Or describe basic transformation.',
-        'Excel to CSV': 'e.g., Use sheet "Sheet1". Skip first 3 rows.',
-        'Split JSON': 'e.g., $.customers[*]',
-        'Add/Modify Fields': 'e.g., Create field "fullName" by combining "firstName" and "lastName".',
-        'Merge Records': 'e.g., Group by correlation ID. Combine into batches of 1000 records.',
+    const renderBrickFields = (index: number) => {
+        const brickType = form.watch(`processors.${index}.type`);
+        const config = getBrickConfig(brickType);
+        if (!config) return null;
+
+        return Object.entries(config.fields).map(([fieldName, fieldConfig]) => (
+            <FormField
+                key={fieldName}
+                control={form.control}
+                name={`processors.${index}.properties.${fieldName}`}
+                render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>{fieldConfig.label}</FormLabel>
+                        <FormControl>
+                            <Input placeholder={fieldConfig.placeholder} {...field} value={field.value ?? ''} />
+                        </FormControl>
+                        <FormDescription>{fieldConfig.description}</FormDescription>
+                        <FormMessage />
+                    </FormItem>
+                )}
+            />
+        ));
     };
+
+    const getFormattedProperties = (index: number) => {
+        const processor = form.watch(`processors.${index}`);
+        const config = getBrickConfig(processor.type);
+        if (!config) return "No configuration available.";
+        
+        const formatted = config.format(processor.properties);
+        if (!formatted || formatted.trim() === '') {
+            return <span className="text-muted-foreground/70">No instructions provided. Click 'Configure' to add them.</span>;
+        }
+        return formatted;
+    }
 
     return (
         <Form {...form}>
@@ -218,7 +261,9 @@ export function CreatePipelineForm() {
                                                 <FormItem>
                                                     <FormLabel>Brick Type</FormLabel>
                                                     <Select onValueChange={(value) => {
-                                                        field.onChange(value);
+                                                        const newBrickType = value as keyof typeof brickConfig;
+                                                        const newDefaultValue = brickConfig[newBrickType].defaultValue;
+                                                        update(index, newDefaultValue);
                                                         setValidationResult(null);
                                                     }} defaultValue={field.value}>
                                                         <FormControl>
@@ -227,7 +272,7 @@ export function CreatePipelineForm() {
                                                         </SelectTrigger>
                                                         </FormControl>
                                                         <SelectContent>
-                                                            {(index === 0 ? sourceBricks : transformationBricks).map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                                                            {(index === 0 ? sourceBrickTypes : transformationBrickTypes).map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                                                         </SelectContent>
                                                     </Select>
                                                     <FormMessage>{fieldState.error?.message}</FormMessage>
@@ -237,7 +282,7 @@ export function CreatePipelineForm() {
 
                                         <div>
                                             <div className="flex justify-between items-center mb-2">
-                                                <FormLabel>Instructions</FormLabel>
+                                                <FormLabel>Configuration</FormLabel>
                                                 <Dialog>
                                                     <DialogTrigger asChild>
                                                         <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5">
@@ -249,29 +294,12 @@ export function CreatePipelineForm() {
                                                         <DialogHeader>
                                                             <DialogTitle>Configure Brick: {form.watch(`processors.${index}.type`)}</DialogTitle>
                                                             <DialogDescription>
-                                                                Provide detailed instructions for how this data processing step should behave.
+                                                                {getBrickConfig(form.watch(`processors.${index}.type`))?.description}
                                                             </DialogDescription>
                                                         </DialogHeader>
-                                                        <FormField
-                                                            control={form.control}
-                                                            name={`processors.${index}.properties`}
-                                                            render={({ field }) => (
-                                                                <FormItem>
-                                                                    <FormControl>
-                                                                        <Textarea
-                                                                            placeholder={brickPlaceholders[form.watch(`processors.${index}.type`)] || 'Describe what this brick should do...'}
-                                                                            className="min-h-[200px] font-mono text-sm bg-background"
-                                                                            {...field}
-                                                                            onChange={(e) => {
-                                                                                field.onChange(e);
-                                                                                setValidationResult(null);
-                                                                            }}
-                                                                        />
-                                                                    </FormControl>
-                                                                    <FormMessage />
-                                                                </FormItem>
-                                                            )}
-                                                        />
+                                                        <div className="space-y-4 py-4">
+                                                            {renderBrickFields(index)}
+                                                        </div>
                                                         <DialogFooter>
                                                             <DialogClose asChild>
                                                                 <Button type="button">Done</Button>
@@ -280,9 +308,9 @@ export function CreatePipelineForm() {
                                                     </DialogContent>
                                                 </Dialog>
                                             </div>
-                                            <p className="text-sm text-muted-foreground bg-background p-3 rounded-md border whitespace-pre-wrap break-words min-h-[60px]">
-                                                {form.watch(`processors.${index}.properties`) || <span className="text-muted-foreground/70">No instructions provided. Click 'Configure' to add them.</span>}
-                                            </p>
+                                            <div className="text-sm text-muted-foreground bg-background p-3 rounded-md border whitespace-pre-wrap break-words min-h-[60px]">
+                                                {getFormattedProperties(index)}
+                                            </div>
                                         </div>
                                     </CardContent>
                                 </Card>
@@ -291,7 +319,10 @@ export function CreatePipelineForm() {
                             <Button
                                 type="button"
                                 variant="outline"
-                                onClick={() => append({ type: 'Add/Modify Fields', properties: '' })}
+                                onClick={() => {
+                                    const newBrick = brickConfig['Add/Modify Fields'].defaultValue;
+                                    append(newBrick);
+                                }}
                             >
                                 <Plus className="mr-2 h-4 w-4" /> Add Transformation Brick
                             </Button>
@@ -386,5 +417,3 @@ export function CreatePipelineForm() {
         </Form>
     );
 }
-
-    
